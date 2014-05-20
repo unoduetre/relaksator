@@ -12,5 +12,5 @@ newmtl headmat
 	Kd 0.5880 0.5880 0.5880
 	Ks 0.0000 0.0000 0.0000
 	Ke 0.0000 0.0000 0.0000
-	map_Ka mapka4.png
-	map_Kd mapka4.png
+	map_Ka texturka.png
+	map_Kd texturka.png
