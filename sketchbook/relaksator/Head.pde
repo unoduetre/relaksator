@@ -13,8 +13,6 @@ public class Head
     this.width = width;
     this.height = height;
     model = new OBJModel(pApplet, "head.obj","relative",TRIANGLES);
-    model.disableMaterial();
-    model.disableTexture();
     model.translate(new PVector(0,-5.9,0)); //środek na wysokości nosa :-)
   }
   
