@@ -1,14 +1,12 @@
 import saito.objloader.OBJModel;
 
-public class Head
+public class Head extends Part
 {
-  private PApplet pApplet = null;
-  private OBJModel model = null;
+
   
   public Head(PApplet pApplet)
   {
-    this.pApplet = pApplet;
-    model = new OBJModel(pApplet, "head.obj","relative",TRIANGLES);
+    super(pApplet,new OBJModel(pApplet, "head.obj","relative",TRIANGLES));
     model.translate(new PVector(0,-5.9,0)); //środek na wysokości nosa :-)
   }
   

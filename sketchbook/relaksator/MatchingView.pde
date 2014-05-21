@@ -1,6 +1,15 @@
-public class MatchingView
+public class MatchingView extends View
 {
-  public MatchingView()
+  public MatchingView(PApplet pApplet)
+  {
+    super(pApplet);
+  }
+  
+  public void show()
+  {
+  }
+  
+  public void hide()
   {
   }
   
