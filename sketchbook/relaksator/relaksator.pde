@@ -1,4 +1,4 @@
-Head head = null;
+
 
 public String sketchRenderer() 
 {
@@ -7,15 +7,15 @@ public String sketchRenderer()
 
 void setup()
 {
-  head = new Head(this, width, height);
+
   //orientation(PORTRAIT);  
   smooth();
   noStroke();
-  background(255,0,0);
 }
 
 void draw()
 {
+  background(0,0,0);
   lights();  
   pushMatrix();
   translate(0.5*width, 0.6*height, 0); // gdzie umieścić nos :-D
