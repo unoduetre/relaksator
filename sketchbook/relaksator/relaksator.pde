@@ -48,7 +48,6 @@ public boolean surfaceTouchEvent(MotionEvent event)
 
 public void keyPressed()
 {
-  println(key);
   if(key == CODED)
   {
     switch(keyCode)
@@ -58,7 +57,7 @@ public void keyPressed()
         {
           switchToView(menuView);
         }
-        else if(currentView == menuView)
+        else
         {
           switchToView(mainView);
         }
@@ -69,11 +68,17 @@ public void keyPressed()
 
 public void captureFaceAction()
 {
-  menuView.captureFaceAction();
+  if(currentView == menuView)
+  {
+    menuView.captureFaceAction();
+  }
 }
 
 public void quitAction()
 {
-  menuView.quitAction();
+  if(currentView == menuView)
+  {
+    menuView.quitAction();
+  }
 }
 
