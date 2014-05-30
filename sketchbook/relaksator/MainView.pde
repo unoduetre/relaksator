@@ -1,6 +1,7 @@
 public class MainView extends View
 {
   private Head head = null;
+  private Float angle = 0.0;
   
   public MainView(PApplet pApplet)
   {
@@ -16,6 +17,21 @@ public class MainView extends View
   {
   }
   
+  public Float getAngle()
+  {
+    return angle;
+  }
+  
+  public void setAngle(Float angle)
+  {
+    this.angle = angle - floor(angle / TWO_PI) * TWO_PI;
+  }
+  
+  public void addAngle(Float angle)
+  {
+    setAngle(this.angle+angle);
+  }
+  
   public void draw()
   {
     pushStyle();
@@ -23,14 +39,14 @@ public class MainView extends View
     lights();    
     pushMatrix();
     translate(0.5*pApplet.width, 0.6*pApplet.height, 0); // gdzie umieścić nos :-D
-    Float scaler = 15.0;
+    rotate(angle);
     if(pApplet.width/pApplet.height < 2/3)
     {
-      scale(pApplet.width/(scaler*2/3)); 
+      scale(pApplet.width*3/2); 
     }
     else
     {
-      scale(pApplet.height/scaler);
+      scale(pApplet.height);
     }
     head.draw();    
     popMatrix();
