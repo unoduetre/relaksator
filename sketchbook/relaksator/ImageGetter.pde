@@ -1,7 +1,7 @@
 import ketai.camera.*;
 import android.hardware.Camera;
 
-public class ImageGetter {
+public static class ImageGetter {
   
   private PApplet pApplet;
   
@@ -26,7 +26,7 @@ public class ImageGetter {
     cam.start();
     float frameTime = 1.0 / (float) fps;
     int delayMs = (int) (frameTime * 1000.0 * 2.0 + 0.5);
-    delay(delayMs);
+    pApplet.delay(delayMs);
     
     cam.read();
     

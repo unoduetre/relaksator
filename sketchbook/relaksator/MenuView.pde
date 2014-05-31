@@ -6,7 +6,7 @@ import controlP5.ControlP5;
 import controlP5.Button;
 
 
-public class MenuView extends View
+public static class MenuView extends View
 {
   private ControlP5 controlP5;
   private List<String> buttonNames;
@@ -25,7 +25,7 @@ public class MenuView extends View
   private List<Integer> buttonLabelWidths;
   private List<Integer> fontSizes;
   
-  public MenuView(PApplet pApplet, ControlP5 controlP5)
+  public MenuView(PApplet pApplet, ControlP5 controlP5) throws Exception
   {
     super(pApplet);
     this.controlP5 = controlP5;
@@ -48,10 +48,10 @@ public class MenuView extends View
       ++spacerHeight;
     }
     
-    backgroundColor = color(0,0,50);
-    passiveButtonColor = color(50,50,100);
-    activeButtonColor = color(70,70,100);
-    buttonLabelColor = color(255,255,255);
+    backgroundColor = kolor(0,0,50);
+    passiveButtonColor = kolor(50,50,100);
+    activeButtonColor = kolor(70,70,100);
+    buttonLabelColor = kolor(255,255,255);
     
     fontLoop: for(Integer fontSize : fontSizes)
     {  
@@ -117,7 +117,7 @@ public class MenuView extends View
   
   public void draw()
   {
-    background(backgroundColor);
+    pApplet.background(backgroundColor);
   }  
   
   public void captureFaceAction()
@@ -127,6 +127,6 @@ public class MenuView extends View
   
   public void quitAction()
   {
-     exit();
+     pApplet.exit();
   }
 }

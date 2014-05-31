@@ -1,6 +1,6 @@
-public class Head extends Part
+public static class Head extends Part
 { 
-  public Head(PApplet pApplet)
+  public Head(PApplet pApplet) throws Exception
   {
     /*
     Poniższy kod nie jest już aktualny, zachowałem aby on gdzieś był, usunę jak zrobię kod zastępczy

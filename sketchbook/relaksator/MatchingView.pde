@@ -1,4 +1,4 @@
-public class MatchingView extends View
+public static class MatchingView extends View
 {
   public MatchingView(PApplet pApplet)
   {

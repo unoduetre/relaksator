@@ -1,9 +1,9 @@
-public class MainView extends View
+public static class MainView extends View
 {
   private Head head = null;
   private Float angle = 0.0;
   
-  public MainView(PApplet pApplet)
+  public MainView(PApplet pApplet) throws Exception
   {
     super(pApplet);
     head = new Head(pApplet);    
@@ -34,22 +34,22 @@ public class MainView extends View
   
   public void draw()
   {
-    pushStyle();
-    background(0,0,0);
-    lights();    
-    pushMatrix();
-    translate(0.5*pApplet.width, 0.6*pApplet.height, 0); // gdzie umieścić nos :-D
-    rotate(angle);
+    pApplet.pushStyle();
+    pApplet.background(0,0,0);
+    pApplet.lights();    
+    pApplet.pushMatrix();
+    pApplet.translate(0.5*pApplet.width, 0.6*pApplet.height, 0); // gdzie umieścić nos :-D
+    pApplet.rotate(angle);
     if(pApplet.width/pApplet.height < 2/3)
     {
-      scale(pApplet.width*3/2); 
+      pApplet.scale(pApplet.width*3/2); 
     }
     else
     {
-      scale(pApplet.height);
+      pApplet.scale(pApplet.height);
     }
     head.draw();    
-    popMatrix();
-    popStyle();    
+    pApplet.popMatrix();
+    pApplet.popStyle();    
   }
 }

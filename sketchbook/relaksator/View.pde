@@ -1,4 +1,4 @@
-public abstract class View extends Widget
+public static abstract class View extends Widget
 {
   public View(PApplet pApplet)
   {
