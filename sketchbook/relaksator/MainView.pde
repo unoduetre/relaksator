@@ -1,12 +1,14 @@
 public static class MainView extends View
 {
-  private Head head = null;
+  private Collada collada = null;
+  private ColladaScene scene = null; 
   private Float angle = 0.0;
   
   public MainView(PApplet pApplet) throws Exception
   {
     super(pApplet);
-    head = new Head(pApplet);    
+    collada = new Collada(pApplet,pApplet.loadXML("animacja.dae"));
+    scene = collada.getScene();    
   }
   
   public void show()
@@ -35,11 +37,12 @@ public static class MainView extends View
   public void draw()
   {
     pApplet.pushStyle();
+    pApplet.pushMatrix();    
     pApplet.background(0,0,0);
     pApplet.lights();    
-    pApplet.pushMatrix();
-    pApplet.translate(0.5*pApplet.width, 0.6*pApplet.height, 0); // gdzie umieścić nos :-D
+    pApplet.translate(pApplet.width/2, pApplet.height/2, 0);
     pApplet.rotate(angle);
+    /*
     if(pApplet.width/pApplet.height < 2/3)
     {
       pApplet.scale(pApplet.width*3/2); 
@@ -47,8 +50,8 @@ public static class MainView extends View
     else
     {
       pApplet.scale(pApplet.height);
-    }
-    head.draw();    
+    }*/
+    scene.draw();    
     pApplet.popMatrix();
     pApplet.popStyle();    
   }
