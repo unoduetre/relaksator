@@ -115,7 +115,7 @@ public static class MenuView extends View
     }    
   }  
   
-  public void draw()
+  public void draw() throws Exception
   {
     pApplet.background(backgroundColor);
   }  

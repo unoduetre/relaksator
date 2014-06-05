@@ -13,7 +13,7 @@ public static class MatchingView extends View
   {
   }
   
-  public void draw()
+  public void draw() throws Exception
   {
   }  
 }

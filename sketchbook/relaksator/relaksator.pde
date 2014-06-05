@@ -28,10 +28,27 @@ private View currentView;
 private ControlP5 controlP5;
 private PVector oldMousePosition;
 private Exception exception;
+private float[][] defaultMatrix = { 
+  {1.0, 0.0, 0.0, 0.0},
+  {0.0, 1.0, 0.0, 0.0},
+  {0.0, 0.0, 1.0, 0.0},
+  {0.0, 0.0, 0.0, 1.0}
+};
 
 public String sketchRenderer() 
 {
   return P3D; 
+}
+
+public void applyDefaultMatrix()
+{
+  resetMatrix();
+  applyMatrix(
+    defaultMatrix[0][0], defaultMatrix[0][1], defaultMatrix[0][2], defaultMatrix[0][3],
+    defaultMatrix[1][0], defaultMatrix[1][1], defaultMatrix[1][2], defaultMatrix[1][3],
+    defaultMatrix[2][0], defaultMatrix[2][1], defaultMatrix[2][2], defaultMatrix[2][3],
+    defaultMatrix[3][0], defaultMatrix[3][1], defaultMatrix[3][2], defaultMatrix[3][3]
+  );
 }
 
 public void setup()
@@ -45,6 +62,9 @@ public void setup()
     mainView = new MainView(this);
     menuView = new MenuView(this, controlP5);
     matchingView = new MatchingView(this);
+    defaultMatrix[0][3] = -width / 2;
+    defaultMatrix[1][3] = -height / 2;
+    defaultMatrix[2][3] = -630.4665;
   
     currentView = mainView;
     smooth();
@@ -61,12 +81,23 @@ public void draw()
 {
   if(exception == null)
   {
-    currentView.draw();
+    try
+    {
+      currentView.draw();
+    }
+    catch(Exception e)
+    { 
+      exception = e;
+      draw();
+      noLoop();
+    }
   }
   else
   {
+    applyDefaultMatrix();
     background(0,0,0);
     fill(255,255,255);
+    textFont(createFont("SansSerif",10));
     textAlign(LEFT, TOP);
     ByteArrayOutputStream stream = new ByteArrayOutputStream();
     exception.printStackTrace(new PrintStream(stream));

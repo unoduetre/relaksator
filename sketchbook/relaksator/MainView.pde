@@ -7,7 +7,7 @@ public static class MainView extends View
   public MainView(PApplet pApplet) throws Exception
   {
     super(pApplet);
-    collada = new Collada(pApplet,pApplet.loadXML("animacja.dae"));
+    collada = new Collada(pApplet,pApplet.loadXML("test2.dae"));
     scene = collada.getScene();    
   }
   
@@ -34,7 +34,7 @@ public static class MainView extends View
     setAngle(this.angle+angle);
   }
   
-  public void draw()
+  public void draw() throws Exception
   {
     pApplet.pushStyle();
     pApplet.pushMatrix();    
@@ -42,8 +42,8 @@ public static class MainView extends View
     pApplet.lights();    
     pApplet.translate(pApplet.width/2, pApplet.height/2, 0);
     pApplet.rotate(angle);
-    /*
-    if(pApplet.width/pApplet.height < 2/3)
+    
+    /*if(pApplet.width/pApplet.height < 2/3)
     {
       pApplet.scale(pApplet.width*3/2); 
     }
@@ -51,7 +51,8 @@ public static class MainView extends View
     {
       pApplet.scale(pApplet.height);
     }*/
-    scene.draw();    
+    //pApplet.scale(10);
+    scene.draw();
     pApplet.popMatrix();
     pApplet.popStyle();    
   }

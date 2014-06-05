@@ -13,5 +13,5 @@ public static abstract class Widget
     return (Integer)Helper.perform(pApplet, "color", new Class<?>[] {Float.TYPE, Float.TYPE, Float.TYPE}, new Float[]{v1, v2, v3});
   }
   
-  public abstract void draw();
+  public abstract void draw() throws Exception;
 }
