@@ -25,9 +25,9 @@ public static class MenuView extends View
   private List<Integer> buttonLabelWidths;
   private List<Integer> fontSizes;
   
-  public MenuView(PApplet pApplet, ControlP5 controlP5) throws Exception
+  public MenuView(PApplet pApplet, Collada collada, ControlP5 controlP5) throws Exception
   {
-    super(pApplet);
+    super(pApplet, collada);
     this.controlP5 = controlP5;
     
     buttonNames = Arrays.asList("captureFaceAction","quitAction");
@@ -118,11 +118,6 @@ public static class MenuView extends View
   public void draw() throws Exception
   {
     pApplet.background(backgroundColor);
-  }  
-  
-  public void captureFaceAction()
-  {
-    pApplet.println("OK");
   }
   
   public void quitAction()

@@ -2,27 +2,58 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Deque;
+import java.util.LinkedList;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 import papaya.Mat;
+
+public static interface HavingContent<T>
+{
+  public abstract T getContent();
+  public abstract void setContent(T content);
+  public abstract void reset();
+}
 
 public static abstract class ColladaPart
 {
   protected PApplet pApplet = null;
-  
+  protected ColladaPart parent = null;
+  protected static Map<String, List<ColladaPart>> sidMap = new HashMap<String, List<ColladaPart>>();
   private static Map<String, ColladaPart> idMap = new HashMap<String, ColladaPart>();
+  protected static Pattern sidPathPattern = Pattern.compile("\\A(\\.|\\w+)(/\\w+)*(\\.\\w+|(?:\\(\\p{Digit}+\\)){0,2})\\z");
+  protected static Pattern selfPattern = Pattern.compile("\\A\\.\\z");
+  protected static Pattern structureElementPattern = Pattern.compile("\\A\\.(\\w)+\\z");
+  protected static Pattern arrayPattern = Pattern.compile("\\A\\((\\p{Digit}+)\\)\\z"); 
+  protected static Pattern matrixPattern = Pattern.compile("\\A\\((\\p{Digit}+)\\)\\((\\p{Digit}+)\\)\\z");
   
-  protected ColladaPart(PApplet pApplet, XML element)
+  private String myId = null;
+  private String mySid = null;
+  
+  protected ColladaPart(PApplet pApplet, XML element, ColladaPart parent) throws Exception
   {
+    pApplet.println("Tworzę obiekt klasy: "+this.getClass().getName());
     this.pApplet = pApplet;
-    
-    String id = null;
+    this.parent = parent;
 
-    if((id = element.getString("id")) != null)
+    if((myId = element.getString("id")) != null)
     {
-      idMap.put(id, this); 
+      idMap.put(myId, this); 
     }        
+    
+    if((mySid = element.getString("sid")) != null)
+    {
+      List<ColladaPart> partList = sidMap.get(mySid);
+      if(partList == null)
+      {
+        partList = new ArrayList<ColladaPart>();
+        sidMap.put(mySid, partList); 
+      }
+      partList.add(this);
+    }
   }
   
   public <T> T parseChild(XML parent, String childName, Class<T> type) throws Exception
@@ -30,22 +61,77 @@ public static abstract class ColladaPart
     XML child = parent.getChild(childName);
     if(child != null)
     {
-      return Helper.construct(type, new Class<?>[] {PApplet.class, XML.class}, new Object[] {pApplet, child});
+      return Helper.construct(type, new Class<?>[] {PApplet.class, XML.class, ColladaPart.class}, new Object[] {pApplet, child, this});
     }
     else
     {
       return null;
     }
   }
-  
+
+  public <T> T parseChild(XML parent, String childName, Class<T> type, Class<?>[] argumentTypes, Object[] arguments) throws Exception
+  {
+    XML child = parent.getChild(childName);
+    
+    if(child != null)
+    {
+      Class<?>[] constructorArgumentTypes = new Class<?>[3+argumentTypes.length];
+      constructorArgumentTypes[0] = PApplet.class;
+      constructorArgumentTypes[1] = XML.class;
+      constructorArgumentTypes[2] = ColladaPart.class;
+      for(Integer i = 0; i < argumentTypes.length; ++i)
+      {
+        constructorArgumentTypes[i+3] = argumentTypes[i];
+      }
+      Object[] constructorArguments = new Object[3+argumentTypes.length];
+      constructorArguments[0] = pApplet;
+      constructorArguments[1] = child;
+      constructorArguments[2] = this;
+      for(Integer i = 0; i < arguments.length; ++i)
+      {
+        constructorArguments[i+3] = arguments[i];
+      }      
+      
+      return Helper.construct(type, constructorArgumentTypes, constructorArguments);
+    }
+    else
+    {
+      return null;
+    }
+  }  
+
   public <T> void parseChildren(XML parent, String childName, Class<T> type, Collection<T> collection) throws Exception
   {
     for(XML child : parent.getChildren(childName))
     {
-      collection.add(Helper.construct(type, new Class<?>[] {PApplet.class, XML.class}, new Object[] {pApplet, child}));
+      collection.add(Helper.construct(type, new Class<?>[] {PApplet.class, XML.class, ColladaPart.class}, new Object[] {pApplet, child, this}));
     }    
-  }
+  }  
   
+  public <T> void parseChildren(XML parent, String childName, Class<T> type, Class<?>[] argumentTypes, Object[] arguments, Collection<T> collection) throws Exception
+  {
+    Class<?>[] constructorArgumentTypes = new Class<?>[2+argumentTypes.length];
+    constructorArgumentTypes[0] = PApplet.class;
+    constructorArgumentTypes[1] = XML.class;
+    for(Integer i = 0; i < argumentTypes.length; ++i)
+    {
+      constructorArgumentTypes[i+2] = argumentTypes[i];
+    }
+    Object[] constructorArguments = new Object[2+argumentTypes.length];
+    constructorArguments[0] = pApplet;
+    for(Integer i = 0; i < arguments.length; ++i)
+    {
+      constructorArguments[i+2] = arguments[i];
+    }          
+    
+    for(XML child : parent.getChildren(childName))
+    {
+      constructorArguments[1] = child;      
+      collection.add(Helper.construct(type, constructorArgumentTypes, constructorArguments));
+    }    
+  }  
+
+
   public <T> T parseAttribute(XML parent, String attributeName, Class<T> type) throws Exception
   {
     return parseAttribute(parent, attributeName, type, null);
@@ -65,33 +151,112 @@ public static abstract class ColladaPart
     }
   }
   
-  public static <T> T getById(String id, Class<T> type)
+  public Boolean hasSidPath(ColladaPart root, Deque<String> sidDeque)
   {
-    return (T)idMap.get(id);
-  }
-  
-  public static Class<?> classById(String id)
-  {
-    return idMap.get(id).getClass();
+    if(root == this)
+    {
+      if(sidDeque.size() == 0)
+      {
+        return true;
+      }
+      else
+      {
+        return false;
+      }
+    }
+    if(parent == null)
+    {
+      return false;
+    }
+    if(sidDeque.size() != 0 && mySid.equals(sidDeque.getLast()))
+    {
+      sidDeque.removeLast();
+    }
+    return parent.hasSidPath(root, sidDeque);
   }
 
-  public static <T> T getByURL(String url, Class<T> type)
+  public ColladaPart getBySidPath(String sidPath) throws Exception
   {
-    return (T)idMap.get(url.substring(1));
+    Matcher sidPathMatcher = sidPathPattern.matcher(sidPath);
+    if(!sidPathMatcher.matches())
+    {
+      throw new Exception("The following sid path is incorrect: "+sidPath);
+    }
+    
+    String id = sidPathMatcher.group(1);
+    String sids = sidPathMatcher.group(2);
+    String rest = sidPathMatcher.group(3);
+    
+    ColladaPart root = null;
+    
+    if(selfPattern.matcher(id).matches())
+    {
+      root = this;
+    }
+    else
+    {
+      root = getById(id);
+    }
+    
+    Integer firstIndex = null;
+    Integer secondIndex = null;
+    
+    Matcher arrayMatcher = arrayPattern.matcher(rest);
+    Matcher matrixMatcher = matrixPattern.matcher(rest);
+    Matcher structureElementMatcher = structureElementPattern.matcher(rest); 
+    
+    if(matrixMatcher.matches())
+    {
+      firstIndex = Integer.valueOf(matrixMatcher.group(1));
+      secondIndex = Integer.valueOf(matrixMatcher.group(2));
+      throw new Exception("TODO sid matrix indexes");
+    }
+    else if(arrayMatcher.matches())
+    {
+      firstIndex = Integer.valueOf(arrayMatcher.group(1));
+      throw new Exception("TODO sid array indexes");
+    }
+    else if(structureElementMatcher.matches())
+    {
+      throw new Exception("TODO sid structure element");
+    }
+    
+    if(sids == null || sids.equals(""))
+    {
+      return root;
+    }
+    else
+    {
+      Deque<String> sidDeque = new LinkedList<String>(Arrays.asList(sids.split("/")));
+      sidDeque.removeFirst();
+      for(ColladaPart part : sidMap.get(sidDeque.getLast()))
+      {
+        if(part.hasSidPath(root, (Deque<String>)((LinkedList<String>)sidDeque).clone()))
+        {
+          return part;
+        }
+      }      
+    }
+    throw new Exception("Cannot find by using the path: "+sidPath);
   }
   
-  public static Class<?> classByURL(String url)
+  public static ColladaPart getById(String id)
   {
-    return idMap.get(url.substring(1)).getClass();
+    return idMap.get(id);
+  }
+
+  public static ColladaPart getByURL(String url)
+  {
+    return idMap.get(url.substring(1));
   }
   
 }
 
 public static abstract class ColladaLibrary extends ColladaPart
 {
-  public ColladaLibrary(PApplet pApplet, XML library) throws Exception
+  public ColladaLibrary(PApplet pApplet, XML library, ColladaPart parent) throws Exception
   {
-    super(pApplet, library);
+    super(pApplet, library, parent);
   }
 }
 
@@ -110,9 +275,11 @@ public static class ColladaAnimation extends ColladaPart
   protected List<ColladaChannel> channelList = new ArrayList<ColladaChannel>();
   protected List<ColladaExtra> extraList = new ArrayList<ColladaExtra>();
   
-  public ColladaAnimation(PApplet pApplet, XML animation) throws Exception
+  protected Long start = null;
+  
+  public ColladaAnimation(PApplet pApplet, XML animation, ColladaPart parent) throws Exception
   {
-    super(pApplet, animation);
+    super(pApplet, animation, parent);
     
     id = parseAttribute(animation, "id", String.class);
     name = parseAttribute(animation, "name", String.class);
@@ -124,13 +291,53 @@ public static class ColladaAnimation extends ColladaPart
     parseChildren(animation, "channel", ColladaChannel.class, channelList);
     parseChildren(animation, "extra", ColladaExtra.class, extraList);
   }
+  
+  public void start(Long startTime)
+  {
+    for(ColladaAnimation animation : animationList)
+    {
+      animation.start(startTime);
+    }
+    
+    start = startTime;
+  }
+  
+  public void stop() throws Exception
+  {
+    start = null;
+    for(ColladaChannel channel : channelList)
+    {
+      channel.reset();
+    }
+  }
+  
+  public void run() throws Exception
+  {
+    
+    Long current = System.currentTimeMillis();
+    
+    for(ColladaAnimation animation : animationList)
+    {
+      animation.run();
+    }
+    
+    if(start == null)
+    {
+      return;
+    }
+    
+    for(ColladaChannel channel : channelList)
+    {
+      channel.forwardFor((current-start)/1000.0);
+    }   
+  }
 }
 
 public static class ColladaAnimationClip extends ColladaPart
 {
-  public ColladaAnimationClip(PApplet pApplet, XML animationClip) throws Exception
+  public ColladaAnimationClip(PApplet pApplet, XML animationClip, ColladaPart parent) throws Exception
   {
-    super(pApplet, animationClip);
+    super(pApplet, animationClip, parent);
     PApplet.println("TODO ColladaAnimationClip");
   }
 }
@@ -140,29 +347,42 @@ public static class ColladaChannel extends ColladaPart
   protected String source = null;
   protected String target = null;
   
-  public ColladaChannel(PApplet pApplet, XML channel) throws Exception
+  public ColladaChannel(PApplet pApplet, XML channel, ColladaPart parent) throws Exception
   {
-    super(pApplet, channel);
+    super(pApplet, channel, parent);
     
     source = parseAttribute(channel, "source", String.class);
     target = parseAttribute(channel, "target", String.class);
+  }
+  
+  public void forwardFor(Float time) throws Exception
+  {
+    ColladaSampler sampler = (ColladaSampler)getByURL(source);
+    HavingContent<Object> container = (HavingContent<Object>)getBySidPath(target);
+    container.setContent(sampler.getAtTime(time));
+  }
+  
+  public void reset() throws Exception
+  {
+    HavingContent<Object> container = (HavingContent<Object>)getBySidPath(target);
+    container.reset();
   }
 }
 
 public static class ColladaInstanceAnimation extends ColladaPart
 {
-  public ColladaInstanceAnimation(PApplet pApplet, XML instanceAnimation) throws Exception
+  public ColladaInstanceAnimation(PApplet pApplet, XML instanceAnimation, ColladaPart parent) throws Exception
   {
-    super(pApplet, instanceAnimation);
+    super(pApplet, instanceAnimation, parent);
     PApplet.println("TODO ColladaInstanceAnimation");
   }
 }
 
 public static class ColladaLibraryAnimationClips extends ColladaLibrary
 {
-  public ColladaLibraryAnimationClips(PApplet pApplet, XML libraryAnimationClips) throws Exception
+  public ColladaLibraryAnimationClips(PApplet pApplet, XML libraryAnimationClips, ColladaPart parent) throws Exception
   {
-    super(pApplet, libraryAnimationClips);
+    super(pApplet, libraryAnimationClips, parent);
     PApplet.println("TODO ColladaLibraryAnimationClips");
   }
 }
@@ -176,9 +396,9 @@ public static class ColladaLibraryAnimations extends ColladaLibrary
   protected List<ColladaAnimation> animationList = new ArrayList<ColladaAnimation>();
   protected List<ColladaExtra> extraList = new ArrayList<ColladaExtra>();
   
-  public ColladaLibraryAnimations(PApplet pApplet, XML libraryAnimations) throws Exception
+  public ColladaLibraryAnimations(PApplet pApplet, XML libraryAnimations, ColladaPart parent) throws Exception
   {
-    super(pApplet, libraryAnimations);
+    super(pApplet, libraryAnimations, parent);
     
     id = parseAttribute(libraryAnimations, "id", String.class);
     name = parseAttribute(libraryAnimations, "name", String.class);
@@ -186,6 +406,14 @@ public static class ColladaLibraryAnimations extends ColladaLibrary
     asset = parseChild(libraryAnimations, "asset", ColladaAsset.class);
     parseChildren(libraryAnimations, "animation", ColladaAnimation.class, animationList);
     parseChildren(libraryAnimations, "extra", ColladaExtra.class, extraList);
+  }
+  
+  public void run() throws Exception
+  {
+    for(ColladaAnimation animation : animationList)
+    {
+      animation.run();
+    }
   }
 }
 
@@ -195,13 +423,60 @@ public static class ColladaSampler extends ColladaPart
   
   protected List<ColladaInput> inputList = new ArrayList<ColladaInput>();
   
-  public ColladaSampler(PApplet pApplet, XML sampler) throws Exception
+  protected List<Float> timeList = new ArrayList<Float>();
+  protected List<Object> contentList = new ArrayList<Object>();
+  protected List<String> interpolationList = new ArrayList<String>();
+  
+  public ColladaSampler(PApplet pApplet, XML sampler, ColladaPart parent) throws Exception
   {
-    super(pApplet, sampler);
+    super(pApplet, sampler, parent);
     
     id = parseAttribute(sampler, "id", String.class);
     
     parseChildren(sampler, "input", ColladaInput.class, inputList);
+    
+    for(ColladaInput input : inputList)
+    {
+      if(input.getSemantic().equals("INPUT"))
+      {
+        for(Integer i = 0; i < input.getCount(); ++i)
+        {
+          timeList.add((Float)input.getUsingInput(i).get("INPUT").get("TIME"));
+        }
+      }
+      if(input.getSemantic().equals("OUTPUT"))
+      {
+        for(Integer i = 0; i < input.getCount(); ++i)
+        {
+          Map<String, Object> map = input.getUsingInput(i).get("OUTPUT");
+          for(String k : map.keySet())
+          {
+            contentList.add(map.get(k));
+            break;
+          }          
+        }        
+      }
+      if(input.getSemantic().equals("INTERPOLATION"))
+      {
+        for(Integer i = 0; i < input.getCount(); ++i)
+        {
+          interpolationList.add((String)input.getUsingInput(i).get("INTERPOLATION").get("name"));          
+        }        
+      }        
+    }
+  }
+  
+  public Object getAtTime(Float time)
+  {
+    Integer index = Collections.binarySearch(timeList, time);
+    if(index >= 0)
+    {
+      return contentList.get(index);
+    }
+    else
+    {
+      return contentList.get(-index-2);
+    }
   }
 }
 
@@ -209,63 +484,63 @@ public static class ColladaSampler extends ColladaPart
 
 public static class ColladaCamera extends ColladaPart
 {
-  public ColladaCamera(PApplet pApplet, XML camera) throws Exception
+  public ColladaCamera(PApplet pApplet, XML camera, ColladaPart parent) throws Exception
   {
-    super(pApplet, camera);
+    super(pApplet, camera, parent);
     PApplet.println("TODO ColladaCamera");
   }
 }
 
 public static class ColladaImager extends ColladaPart
 {
-  public ColladaImager(PApplet pApplet, XML imager) throws Exception
+  public ColladaImager(PApplet pApplet, XML imager, ColladaPart parent) throws Exception
   {
-    super(pApplet, imager);
+    super(pApplet, imager, parent);
     PApplet.println("TODO ColladaImager");
   }
 }
 
 public static class ColladaInstanceCamera extends ColladaPart
 {
-  public ColladaInstanceCamera(PApplet pApplet, XML instanceCamera) throws Exception
+  public ColladaInstanceCamera(PApplet pApplet, XML instanceCamera, ColladaPart parent) throws Exception
   {
-    super(pApplet, instanceCamera);
+    super(pApplet, instanceCamera, parent);
     PApplet.println("TODO ColladaInstanceCamera");
   }
 }
 
 public static class ColladaLibraryCameras extends ColladaLibrary
 {
-  public ColladaLibraryCameras(PApplet pApplet, XML libraryCameras) throws Exception
+  public ColladaLibraryCameras(PApplet pApplet, XML libraryCameras, ColladaPart parent) throws Exception
   {
-    super(pApplet, libraryCameras);
+    super(pApplet, libraryCameras, parent);
     PApplet.println("TODO ColladaLibraryCameras");
   }
 }
 
 public static class ColladaOptics extends ColladaPart
 {
-  public ColladaOptics(PApplet pApplet, XML optics) throws Exception
+  public ColladaOptics(PApplet pApplet, XML optics, ColladaPart parent) throws Exception
   {
-    super(pApplet, optics);
+    super(pApplet, optics, parent);
     PApplet.println("TODO ColladaOptics");
   }
 }
 
 public static class ColladaOrthographic extends ColladaPart
 {
-  public ColladaOrthographic(PApplet pApplet, XML orthographic) throws Exception
+  public ColladaOrthographic(PApplet pApplet, XML orthographic, ColladaPart parent) throws Exception
   {
-    super(pApplet, orthographic);
+    super(pApplet, orthographic, parent);
     PApplet.println("TODO ColladaOrthographic");
   }
 }
 
 public static class ColladaPerspective extends ColladaPart
 {
-  public ColladaPerspective(PApplet pApplet, XML perspective) throws Exception
+  public ColladaPerspective(PApplet pApplet, XML perspective, ColladaPart parent) throws Exception
   {
-    super(pApplet, perspective);
+    super(pApplet, perspective, parent);
     PApplet.println("TODO ColladaPerspective");
   }
 }
@@ -275,9 +550,9 @@ public static class ColladaBindShapeMatrix extends ColladaPart
 {
   protected float[][] content = new float[4][4];
   
-  public ColladaBindShapeMatrix(PApplet pApplet, XML bindShapeMatrix) throws Exception
+  public ColladaBindShapeMatrix(PApplet pApplet, XML bindShapeMatrix, ColladaPart parent) throws Exception
   {
-    super(pApplet, bindShapeMatrix);
+    super(pApplet, bindShapeMatrix, parent);
     
     Integer i = 0;
     Integer j = 0;
@@ -286,13 +561,18 @@ public static class ColladaBindShapeMatrix extends ColladaPart
       if(value.length() > 0)
       {
         content[i][j] = Float.valueOf(value);
-        if(++i >= 4)
+        if(++j >= 4)
         {
-          i = 0;
-          ++j;
+          j = 0;
+          ++i;
         }
       }
     }
+  }
+  
+  public float[][] getContent()
+  {
+    return content;
   }
 }
 
@@ -306,9 +586,9 @@ public static class ColladaController extends ColladaPart
   protected ColladaMorph morph = null;
   protected List<ColladaExtra> extraList = new ArrayList<ColladaExtra>(); 
   
-  public ColladaController(PApplet pApplet, XML controller) throws Exception
+  public ColladaController(PApplet pApplet, XML controller, ColladaPart parent) throws Exception
   {
-    super(pApplet, controller);
+    super(pApplet, controller, parent);
     
     id = parseAttribute(controller, "id", String.class);
     name = parseAttribute(controller, "name", String.class);
@@ -318,6 +598,15 @@ public static class ColladaController extends ColladaPart
     morph = parseChild(controller, "morph", ColladaMorph.class);
     parseChildren(controller, "extra", ColladaExtra.class, extraList);
   }
+  
+  public void draw() throws Exception
+  {
+    if(skin != null)
+    {
+      skin.draw();
+    }
+  }  
+  
 }
 
 public static class ColladaInstanceController extends ColladaPart
@@ -330,9 +619,9 @@ public static class ColladaInstanceController extends ColladaPart
   //protected ColladaBindMaterial bindMaterial = null;
   protected List<ColladaExtra> extraList = new ArrayList<ColladaExtra>();
   
-  public ColladaInstanceController(PApplet pApplet, XML instanceController) throws Exception
+  public ColladaInstanceController(PApplet pApplet, XML instanceController, ColladaPart parent) throws Exception
   {
-    super(pApplet, instanceController);
+    super(pApplet, instanceController, parent);
     
     sid = parseAttribute(instanceController, "sid", String.class);
     name = parseAttribute(instanceController, "name", String.class);
@@ -342,6 +631,11 @@ public static class ColladaInstanceController extends ColladaPart
     //bindMaterial = parseChild(instanceController, "bind_material", ColladaBindMaterial.class);
     parseChildren(instanceController, "extra", ColladaExtra.class, extraList); 
   }
+  
+  public void draw() throws Exception
+  {
+    ((ColladaController)getByURL(url)).draw();
+  }  
 }
 
 public static class ColladaJoints extends ColladaPart
@@ -349,13 +643,54 @@ public static class ColladaJoints extends ColladaPart
   protected List<ColladaInput> inputList = new ArrayList<ColladaInput>();
   protected List<ColladaExtra> extraList = new ArrayList<ColladaExtra>();
   
-  public ColladaJoints(PApplet pApplet, XML joints) throws Exception
+  protected List<String> jointsList = new ArrayList<String>();
+  protected List<float[][]> inverseBindPoseMatrixList = new ArrayList<float[][]>();
+  
+  public ColladaJoints(PApplet pApplet, XML joints, ColladaPart parent) throws Exception
   {
-    super(pApplet, joints);
+    super(pApplet, joints, parent);
     
     parseChildren(joints, "input", ColladaInput.class, inputList);
     parseChildren(joints, "extra", ColladaExtra.class, extraList);
+    
+    for(ColladaInput input : inputList)
+    {
+      if(input.getSemantic().equals("JOINT"))
+      {
+        for(Integer i = 0; i < input.getCount(); ++i)
+        {
+          jointsList.add((String)input.getUsingInput(i).get("JOINT").get("name"));
+        }
+      }
+      if(input.getSemantic().equals("INV_BIND_MATRIX"))
+      {   
+        for(Integer i = 0; i < input.getCount(); ++i)
+        {
+          inverseBindPoseMatrixList.add((float[][])input.getUsingInput(i).get("INV_BIND_MATRIX").get("float4x4"));
+        }
+      }  
+    }
+    if(jointsList.size() != inverseBindPoseMatrixList.size())
+    {
+      throw new Exception("The number of joints is not equal to the number of the matrices");
+    }    
   }
+  
+  public Integer getCount()
+  {
+    return jointsList.size();
+  }
+  
+  public float[][] getInverseBindPoseMatrix(Integer i)
+  {
+    return inverseBindPoseMatrixList.get(i);
+  }
+  
+  public float[][] getJointMatrix(Integer i) throws Exception
+  {
+    return ((ColladaNode)getBySidPath((String)jointsList.get(i))).getMatrix();
+  }
+  
 }
 
 public static class ColladaLibraryControllers extends ColladaLibrary
@@ -367,9 +702,9 @@ public static class ColladaLibraryControllers extends ColladaLibrary
   protected List<ColladaController> controllerList = new ArrayList<ColladaController>();
   protected List<ColladaExtra> extraList = new ArrayList<ColladaExtra>();
   
-  public ColladaLibraryControllers(PApplet pApplet, XML libraryControllers) throws Exception
+  public ColladaLibraryControllers(PApplet pApplet, XML libraryControllers, ColladaPart parent) throws Exception
   {
-    super(pApplet, libraryControllers);
+    super(pApplet, libraryControllers, parent);
     
     id = parseAttribute(libraryControllers, "id", String.class);
     name = parseAttribute(libraryControllers, "name", String.class);
@@ -382,18 +717,18 @@ public static class ColladaLibraryControllers extends ColladaLibrary
 
 public static class ColladaMorph extends ColladaPart
 {
-  public ColladaMorph(PApplet pApplet, XML morph) throws Exception
+  public ColladaMorph(PApplet pApplet, XML morph, ColladaPart parent) throws Exception
   {
-    super(pApplet, morph);
+    super(pApplet, morph, parent);
     PApplet.println("TODO ColladaMorph");
   }
 }
 
 public static class ColladaSkeleton extends ColladaPart
 {
-  public ColladaSkeleton(PApplet pApplet, XML skeleton) throws Exception
+  public ColladaSkeleton(PApplet pApplet, XML skeleton, ColladaPart parent) throws Exception
   {
-    super(pApplet, skeleton);
+    super(pApplet, skeleton, parent);
     PApplet.println("TODO ColladaSkeleton");
   }
 }
@@ -408,25 +743,80 @@ public static class ColladaSkin extends ColladaPart
   protected ColladaVertexWeights vertexWeights = null;
   protected List<ColladaExtra> extraList = new ArrayList<ColladaExtra>();
   
-  public ColladaSkin(PApplet pApplet, XML skin) throws Exception
+  protected List<float[][]> combinedBindMatrixList = new ArrayList<float[][]>();
+  
+  public ColladaSkin(PApplet pApplet, XML skin, ColladaPart parent) throws Exception
   {
-    super(pApplet, skin);
+    super(pApplet, skin, parent);
     
     sourceAttr = parseAttribute(skin, "source", String.class);
     
     bindShapeMatrix = parseChild(skin, "bind_shape_matrix", ColladaBindShapeMatrix.class);
-    parseChildren(skin, "source", ColladaSource.class, sourceList);
+    parseChildren(skin, "source", ColladaSource.class, sourceList);   
     joints = parseChild(skin, "joints", ColladaJoints.class);
     vertexWeights = parseChild(skin, "vertex_weights", ColladaVertexWeights.class);
     parseChildren(skin, "extra", ColladaExtra.class, extraList);
+    
+    for(Integer i = 0; i < joints.getCount(); ++i)
+    {
+      if(bindShapeMatrix == null)
+      {
+        combinedBindMatrixList.add(joints.getInverseBindPoseMatrix(i));
+      }
+      else
+      {
+        combinedBindMatrixList.add(Mat.multiply(joints.getInverseBindPoseMatrix(i),bindShapeMatrix.getContent()));        
+      }
+    }
+  }
+  
+  public void draw() throws Exception
+  {
+    
+    List<float[][]> matrixList = new ArrayList<float[][]>();
+    for(Integer i = 0; i < combinedBindMatrixList.size(); ++i)
+    {
+      matrixList.add(Mat.multiply(joints.getJointMatrix(i),combinedBindMatrixList.get(i)));
+    }
+    
+    List<Map<Integer, Float>> weightMapList = vertexWeights.getContent();
+        
+    ColladaGeometry geometry = ((ColladaGeometry)getByURL(sourceAttr));
+    ColladaFloatArray floatArray = ((ColladaTechniqueCommonInSource)geometry.getMesh().getVertices().getPositionsSource().getTechnique()).getAccessor().getSource(ColladaFloatArray.class);
+    List<Float> oldVertexList = floatArray.getContent();
+    List<Float> newVertexList = new ArrayList<Float>();
+    
+    for(Integer i = 0; i < oldVertexList.size(); i += 3)
+    {
+        Integer vertexIndex = i / 3;
+        Map<Integer, Float> weightMap = weightMapList.get(vertexIndex);
+        
+        float[] oldVertex = new float[] {oldVertexList.get(i), oldVertexList.get(i+1), oldVertexList.get(i+2), 1.0};
+        float[] newVertex = new float[] {0.0, 0.0, 0.0, 0.0};
+        
+        for(Integer k : weightMap.keySet())
+        {
+          newVertex = Mat.sum(newVertex,Mat.multiply(Mat.multiply(matrixList.get(k),oldVertex), weightMap.get(k))); 
+        }
+        
+        newVertexList.add((Float)newVertex[0]);
+        newVertexList.add((Float)newVertex[1]);
+        newVertexList.add((Float)newVertex[2]);
+    }   
+    
+    floatArray.setContent(newVertexList);
+    
+    geometry.draw();
+    
+    floatArray.reset();
   }
 }
 
 public static class ColladaTargets extends ColladaPart
 {
-  public ColladaTargets(PApplet pApplet, XML targets) throws Exception
+  public ColladaTargets(PApplet pApplet, XML targets, ColladaPart parent) throws Exception
   {
-    super(pApplet, targets);
+    super(pApplet, targets, parent);
     PApplet.println("TODO ColladaTargets");
   }
 }
@@ -435,9 +825,9 @@ public static class ColladaV extends ColladaPart
 {
   protected List<Integer> content = new ArrayList<Integer>();
   
-  public ColladaV(PApplet pApplet, XML v) throws Exception
+  public ColladaV(PApplet pApplet, XML v, ColladaPart parent) throws Exception
   {
-    super(pApplet, v);
+    super(pApplet, v, parent);
 
     for(String value : v.getContent().split("\\s+"))
     {
@@ -447,15 +837,20 @@ public static class ColladaV extends ColladaPart
       }  
     }
   }
+  
+  public List<Integer> getContent()
+  {
+    return content;
+  }
 }
 
 public static class ColladaVCount extends ColladaPart
 {
   protected List<Integer> content = new ArrayList<Integer>();  
   
-  public ColladaVCount(PApplet pApplet, XML vCount) throws Exception
+  public ColladaVCount(PApplet pApplet, XML vCount, ColladaPart parent) throws Exception
   {
-    super(pApplet, vCount);
+    super(pApplet, vCount, parent);
     
     for(String value : vCount.getContent().split("\\s+"))
     {
@@ -465,6 +860,11 @@ public static class ColladaVCount extends ColladaPart
       }  
     }
   }
+  
+  public List<Integer> getContent()
+  {
+    return content;
+  }  
 }
 
 public static class ColladaVertexWeights extends ColladaPart
@@ -476,9 +876,14 @@ public static class ColladaVertexWeights extends ColladaPart
   protected ColladaV v = null;
   protected List<ColladaExtra> extraList = new ArrayList<ColladaExtra>();
   
-  public ColladaVertexWeights(PApplet pApplet, XML vertexWeights) throws Exception
+  protected Integer maxOffset = null;
+  protected Map<Integer, ColladaInput> inputMap = new HashMap<Integer, ColladaInput>(); 
+  
+  protected List<Map<Integer, Float>> content = new ArrayList<Map<Integer, Float>>();
+  
+  public ColladaVertexWeights(PApplet pApplet, XML vertexWeights, ColladaPart parent) throws Exception
   {
-    super(pApplet, vertexWeights);
+    super(pApplet, vertexWeights, parent);
     
     count = parseAttribute(vertexWeights, "count", Integer.class);
     
@@ -486,6 +891,61 @@ public static class ColladaVertexWeights extends ColladaPart
     vCount = parseChild(vertexWeights, "vcount", ColladaVCount.class);
     v = parseChild(vertexWeights, "v", ColladaV.class);
     parseChildren(vertexWeights, "extra", ColladaExtra.class, extraList);
+    
+    maxOffset = 0;
+    
+    for(ColladaInput input : inputList)
+    {
+      Integer inputOffset = input.getOffset();
+      if(inputOffset > maxOffset)
+      {
+        maxOffset = inputOffset;
+      }
+    }
+    
+    for(ColladaInput input : inputList)
+    {
+      inputMap.put(input.getOffset(),input);
+    }
+        
+    Integer j = 0;
+    for(Integer i = 0; i < count; ++i)
+    {
+      Integer jointsCount = vCount.getContent().get(i);
+      Map<Integer,  Float> map = new HashMap<Integer, Float>();
+      content.add(map);
+      
+      for(Integer k = j; k < j + jointsCount; ++k)
+      { 
+        Integer jointIndex = null;
+        Float jointWeight = null;
+        
+        for(Integer offset = 0; offset <= maxOffset; ++offset)
+        {
+          ColladaInput input = inputMap.get(offset);
+          if(input == null)
+          {
+            continue;
+          }
+          if(input.getSemantic().equals("JOINT"))
+          {
+            jointIndex = (Integer)v.getContent().get(k*(maxOffset+1)+offset);
+          }
+          else if(input.getSemantic().equals("WEIGHT"))
+          {
+            jointWeight = (Float)input.getUsingInput(v.getContent().get(k*(maxOffset+1)+offset)).get("WEIGHT").get("float");
+          }
+        }
+        map.put(jointIndex, jointWeight);
+      }
+      
+      j += jointsCount;
+    }
+  }
+  
+  public List<Map<Integer, Float>> getContent()
+  {
+    return content;
   }
 }
  
@@ -500,9 +960,9 @@ public static class ColladaAccessor extends ColladaPart
   
   protected List<ColladaParam> paramList = new ArrayList<ColladaParam>();
   
-  public ColladaAccessor(PApplet pApplet, XML accessor) throws Exception
+  public ColladaAccessor(PApplet pApplet, XML accessor, ColladaPart parent) throws Exception
   {
-    super(pApplet, accessor);
+    super(pApplet, accessor, parent);
     
     count = parseAttribute(accessor, "count", Integer.class);
     offset = parseAttribute(accessor, "offset", Integer.class, 0);
@@ -517,6 +977,11 @@ public static class ColladaAccessor extends ColladaPart
     return count;
   }
   
+  public <T> T getSource(Class<T> type)
+  {
+    return (T)getByURL(source);
+  }
+  
   public Map<String, Object> get(Integer index) throws Exception
   {
     if(index >= count)
@@ -525,80 +990,43 @@ public static class ColladaAccessor extends ColladaPart
     }
     
     Map<String, Object> map = new HashMap<String, Object>();
-    List<Object> list = getByURL(source, ColladaArray.class).getContent().subList(offset + index*stride, offset+(index+1)*stride);
+    Deque<Object> deque = new LinkedList<Object>(((HavingContent<List<Object>>)getByURL(source)).getContent().subList(offset + index*stride, offset+(index+1)*stride));
+    
     for(Integer i = 0; i < paramList.size(); ++i)
     {
       ColladaParam param = paramList.get(i);
-      if(param.getName() == null)
+      String paramName = param.getName();
+      if(paramName == null)
       {
-        continue;
-      }
-      Object object = list.get(i);
-      
-      Class<?> sourceClass = object.getClass();
-      Class<?> destinationClass = param.getParamClass();
-     
-      if(sourceClass == destinationClass)
-      {
-       map.put(param.getName(),object);       
-      }
-      else if(Number.class.isAssignableFrom(sourceClass) && Number.class.isAssignableFrom(destinationClass))
-      {
-        Number num = (Number) object;
-        if(destinationClass == Byte.class)
+        if(map.get(param.getType()) == null)
         {
-          map.put(param.getName(),new Byte(num.byteValue()));
-        } 
-        else if(destinationClass == Short.class)
-        { 
-          map.put(param.getName(),new Short(num.shortValue()));
-        } 
-        else if(destinationClass == Integer.class)
-        {
-          map.put(param.getName(),new Integer(num.intValue())); 
-        } 
-        else if(destinationClass == Long.class)
-        { 
-         map.put(param.getName(),new Long(num.longValue()));
-        } 
-        else if(destinationClass == Float.class)
-        { 
-          map.put(param.getName(),new Float(num.floatValue()));
-        } 
-        else if(destinationClass == Double.class)
-        { 
-          map.put(param.getName(),new Double(num.doubleValue()));
-        }       
+          paramName = param.getType();
+        }
         else
         {
-          map.put(param.getName(),Helper.performClass(destinationClass, "valueOf", new Class<?>[] {(Class<?>)sourceClass.getField("TYPE").get(null)}, new Object[] {object}));          
+          continue;
         }
-     }
-     else if(sourceClass == Boolean.class)
-     {
-       map.put(param.getName(),Helper.performClass(destinationClass, "valueOf", new Class<?>[] {(Class<?>)sourceClass.getField("TYPE").get(null)}, new Object[] {object}));        
-     }
-     else
-     {
-       map.put(param.getName(),Helper.performClass(destinationClass, "valueOf", new Class<?>[] {sourceClass}, new Object[] {object}));
-     }
+      }
+      
+      map.put(paramName, param.getFromDeque(deque));
     }
     
     return map;  
   }
 }
 
-public static abstract class ColladaArray<T> extends ColladaPart
+public static abstract class ColladaArray<T> extends ColladaPart implements HavingContent<List<T>>
 {
   protected Integer count = null;
   protected String id = null;
   protected String name = null;
   
   protected List<T> content = new ArrayList<T>();
+  protected List<T> newContent = null;
   
-  public ColladaArray(PApplet pApplet, XML array, Class<T> type, T empty) throws Exception
+  public ColladaArray(PApplet pApplet, XML array, ColladaPart parent, Class<T> type, T empty) throws Exception
   {
-    super(pApplet, array);
+    super(pApplet, array, parent);
     
     count = parseAttribute(array, "count", Integer.class);
     id = parseAttribute(array, "id", String.class);
@@ -625,17 +1053,34 @@ public static abstract class ColladaArray<T> extends ColladaPart
     }
   }
   
+  public void setContent(List<T> newContent)
+  {
+    this.newContent = newContent; 
+  }
+  
+  public void reset()
+  {
+    newContent = null;
+  }
+  
   public List<T> getContent()
   {
-    return content;
+    if(newContent != null)
+    {
+      return newContent;
+    }
+    else
+    {
+      return content;
+    }
   } 
 }
 
 public static class ColladaBoolArray extends ColladaArray<Boolean>
 {
-  public ColladaBoolArray(PApplet pApplet, XML boolArray) throws Exception
+  public ColladaBoolArray(PApplet pApplet, XML boolArray, ColladaPart parent) throws Exception
   {
-    super(pApplet, boolArray, Boolean.class, false);
+    super(pApplet, boolArray, parent, Boolean.class, false);
   }
 }
 
@@ -644,9 +1089,9 @@ public static class ColladaFloatArray extends ColladaArray<Float>
   protected Integer digits = null;
   protected Integer magnitude = null;
   
-  public ColladaFloatArray(PApplet pApplet, XML floatArray) throws Exception
+  public ColladaFloatArray(PApplet pApplet, XML floatArray, ColladaPart parent) throws Exception
   {
-    super(pApplet, floatArray, Float.class, 0.0);
+    super(pApplet, floatArray, parent, Float.class, 0.0);
     
     digits = parseAttribute(floatArray, "digits", Integer.class, 6);
     magnitude = parseAttribute(floatArray, "magnitude", Integer.class, 38);    
@@ -655,9 +1100,9 @@ public static class ColladaFloatArray extends ColladaArray<Float>
 
 public static class ColladaIDREFArray extends ColladaArray<String>
 {  
-  public ColladaIDREFArray(PApplet pApplet, XML idrefArray) throws Exception
+  public ColladaIDREFArray(PApplet pApplet, XML idrefArray, ColladaPart parent) throws Exception
   {
-    super(pApplet, idrefArray, String.class,"");    
+    super(pApplet, idrefArray, parent, String.class,"");    
   }
 }
 
@@ -666,9 +1111,9 @@ public static class ColladaIntArray extends ColladaArray<Integer>
   protected Integer minInclusive = null;
   protected Integer maxInclusive = null;
     
-  public ColladaIntArray(PApplet pApplet, XML intArray) throws Exception
+  public ColladaIntArray(PApplet pApplet, XML intArray, ColladaPart parent) throws Exception
   {
-    super(pApplet, intArray, Integer.class, 0);
+    super(pApplet, intArray, parent, Integer.class, 0);
     
     minInclusive = parseAttribute(intArray, "minInclusive", Integer.class, -2147483648);
     maxInclusive = parseAttribute(intArray, "maxInclusive", Integer.class, 2147483647);       
@@ -677,9 +1122,9 @@ public static class ColladaIntArray extends ColladaArray<Integer>
 
 public static class ColladaNameArray extends ColladaArray<String>
 {   
-  public ColladaNameArray(PApplet pApplet, XML nameArray) throws Exception
+  public ColladaNameArray(PApplet pApplet, XML nameArray, ColladaPart parent) throws Exception
   {
-    super(pApplet, nameArray, String.class, "");
+    super(pApplet, nameArray, parent, String.class, "");
   }
 }
 
@@ -690,9 +1135,9 @@ public static class ColladaParam extends ColladaPart
   protected String type = null;
   protected String semantic = null;
   
-  public ColladaParam(PApplet pApplet, XML param) throws Exception
+  public ColladaParam(PApplet pApplet, XML param, ColladaPart parent) throws Exception
   {
-    super(pApplet, param);
+    super(pApplet, param, parent);
     
     name = parseAttribute(param, "name", String.class);
     sid = parseAttribute(param, "sid", String.class);
@@ -705,45 +1150,266 @@ public static class ColladaParam extends ColladaPart
     return name;
   }
   
-  public Class<?> getParamClass()
+  public String getType()
   {
-    if(type.equals("bool"))
+    return type;
+  }
+  
+  private <T> T convertTo(Object object, Class<T> type) throws Exception
+  {
+    if(object.getClass() == type)
     {
-      return Boolean.class;
+      return (T)object;
     }
-    else if(type.equals("short"))
+    else if(Number.class.isAssignableFrom(object.getClass()) && Number.class.isAssignableFrom(type))
     {
-      return Short.class;
-    }    
-    else if(type.equals("int"))
-    {
-      return Integer.class;
+      if(type == Byte.class)
+      {
+        return (T)new Byte(((Number)object).byteValue());
+      }
+      else if(type == Double.class)
+      {
+        return (T)new Double(((Number)object).doubleValue());
+      }
+      else if(type == Float.class)
+      {
+        return (T)new Float(((Number)object).floatValue());
+      }      
+      else if(type == Integer.class)
+      {
+        return (T)new Integer(((Number)object).intValue());
+      }      
+      else if(type == Long.class)
+      {
+        return (T)new Long(((Number)object).longValue());
+      }      
+      else if(type == Short.class)
+      {
+        return (T)new Short(((Number)object).shortValue());
+      }
+      else
+      {
+        throw new Exception("TODO other number conversions");
+      }     
     }
-    else if(type.equals("long"))
+    else if(object.getClass() == Boolean.class)
     {
-      return Long.class;
-    }    
-    else if(type.equals("float"))
-    {
-      return Float.class;
-    }
-    else if(type.equals("double"))
-    {
-      return Double.class;
-    }
-    else if(type.equals("Name"))
-    {
-      return String.class;
-    }
-    else if(type.equals("IDREF"))
-    {
-      return String.class;
+      return (T)Helper.performClass(type, "valueOf", new Class<?>[] {Boolean.TYPE}, new Object[] {object});    
     }
     else
     {
-      return String.class;
+      return (T)Helper.performClass(type, "valueOf", new Class<?>[] {String.class}, new Object[] {String.valueOf(object)});     
     }
   }
+  
+  public Object getFromDeque(Deque<Object> deque) throws Exception
+  {
+    if(type.equals("bool"))
+    {
+      return convertTo(deque.removeFirst(), Boolean.class);
+    }
+    else if(type.equals("bool2"))
+    {
+      return new boolean[] {
+        convertTo(deque.removeFirst(), Boolean.class),
+        convertTo(deque.removeFirst(), Boolean.class)
+      };    
+    }
+    else if(type.equals("bool3"))
+    {
+      return new boolean[] {
+        convertTo(deque.removeFirst(), Boolean.class),
+        convertTo(deque.removeFirst(), Boolean.class),        
+        convertTo(deque.removeFirst(), Boolean.class)
+      };
+    }    
+    else if(type.equals("bool4"))
+    {
+      return new boolean[] {
+        convertTo(deque.removeFirst(), Boolean.class),
+        convertTo(deque.removeFirst(), Boolean.class),
+        convertTo(deque.removeFirst(), Boolean.class),        
+        convertTo(deque.removeFirst(), Boolean.class)
+      };
+    }
+    else if(type.equals("float"))
+    {
+      return convertTo(deque.removeFirst(), Float.class);       
+    }
+    else if(type.equals("float2"))
+    {
+      return new float[] {
+        convertTo(deque.removeFirst(), Float.class),
+        convertTo(deque.removeFirst(), Float.class)
+      };            
+    }
+    else if(type.equals("float2x2"))
+    {
+      return new float[][] {
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) },
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) }
+      };            
+    }
+    else if(type.equals("float2x3"))
+    {
+      return new float[][] {
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) },
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) }
+      };            
+    }
+    else if(type.equals("float2x4"))
+    {
+      return new float[][] {
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) },
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) }
+      };            
+    }
+    else if(type.equals("float3"))
+    {
+      return new float[] {
+        convertTo(deque.removeFirst(), Float.class),
+        convertTo(deque.removeFirst(), Float.class),        
+        convertTo(deque.removeFirst(), Float.class)
+      };            
+    }
+    else if(type.equals("float3x2"))
+    {
+      return new float[][] {
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) },
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) },        
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) }
+      };            
+    }
+    else if(type.equals("float3x3"))
+    {
+      return new float[][] {
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) },
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) },        
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) }
+      };            
+    }
+    else if(type.equals("float3x4"))
+    {
+      return new float[][] {
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) },
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) },        
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) }
+      };            
+    }
+    else if(type.equals("float4"))
+    {
+      return new float[] {
+        convertTo(deque.removeFirst(), Float.class),
+        convertTo(deque.removeFirst(), Float.class),
+        convertTo(deque.removeFirst(), Float.class),        
+        convertTo(deque.removeFirst(), Float.class)
+      };            
+    }
+    else if(type.equals("float4x2"))
+    {
+      return new float[][] {
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) },
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) },
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) },        
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) }
+      };            
+    }
+    else if(type.equals("float4x3"))
+    {
+      return new float[][] {
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) },
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) },
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) },        
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) }
+      };            
+    }
+    else if(type.equals("float4x4"))
+    {
+      return new float[][] {
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) },
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) },
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) },        
+        new float[] { convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class), convertTo(deque.removeFirst(), Float.class) }
+      };            
+    }   
+    else if(type.equals("float7"))
+    {
+      return new float[] {
+        convertTo(deque.removeFirst(), Float.class),
+        convertTo(deque.removeFirst(), Float.class),
+        convertTo(deque.removeFirst(), Float.class),        
+        convertTo(deque.removeFirst(), Float.class),
+        convertTo(deque.removeFirst(), Float.class),
+        convertTo(deque.removeFirst(), Float.class),        
+        convertTo(deque.removeFirst(), Float.class)
+      };            
+    }  
+    else if(type.equals("int"))
+    {
+      return convertTo(deque.removeFirst(), Integer.class);       
+    }
+    else if(type.equals("int2"))
+    {
+      return new int[] {
+        convertTo(deque.removeFirst(), Integer.class),
+        convertTo(deque.removeFirst(), Integer.class)
+      };            
+    }
+    else if(type.equals("int2x2"))
+    {
+      return new int[][] {
+        new int[] { convertTo(deque.removeFirst(), Integer.class), convertTo(deque.removeFirst(), Integer.class) },
+        new int[] { convertTo(deque.removeFirst(), Integer.class), convertTo(deque.removeFirst(), Integer.class) }
+      };            
+    }    
+    else if(type.equals("int3"))
+    {
+      return new int[] {
+        convertTo(deque.removeFirst(), Integer.class),
+        convertTo(deque.removeFirst(), Integer.class),        
+        convertTo(deque.removeFirst(), Integer.class)
+      };            
+    }  
+    else if(type.equals("int3x3"))
+    {
+      return new int[][] {
+        new int[] { convertTo(deque.removeFirst(), Integer.class), convertTo(deque.removeFirst(), Integer.class), convertTo(deque.removeFirst(), Integer.class) },
+        new int[] { convertTo(deque.removeFirst(), Integer.class), convertTo(deque.removeFirst(), Integer.class), convertTo(deque.removeFirst(), Integer.class) },        
+        new int[] { convertTo(deque.removeFirst(), Integer.class), convertTo(deque.removeFirst(), Integer.class), convertTo(deque.removeFirst(), Integer.class) }
+      };            
+    }    
+    else if(type.equals("int4"))
+    {
+      return new int[] {
+        convertTo(deque.removeFirst(), Integer.class),
+        convertTo(deque.removeFirst(), Integer.class),
+        convertTo(deque.removeFirst(), Integer.class),        
+        convertTo(deque.removeFirst(), Integer.class)
+      };            
+    }    
+    else if(type.equals("int4x4"))
+    {
+      return new int[][] {
+        new int[] { convertTo(deque.removeFirst(), Integer.class), convertTo(deque.removeFirst(), Integer.class), convertTo(deque.removeFirst(), Integer.class), convertTo(deque.removeFirst(), Integer.class) },
+        new int[] { convertTo(deque.removeFirst(), Integer.class), convertTo(deque.removeFirst(), Integer.class), convertTo(deque.removeFirst(), Integer.class), convertTo(deque.removeFirst(), Integer.class) },
+        new int[] { convertTo(deque.removeFirst(), Integer.class), convertTo(deque.removeFirst(), Integer.class), convertTo(deque.removeFirst(), Integer.class), convertTo(deque.removeFirst(), Integer.class) },        
+        new int[] { convertTo(deque.removeFirst(), Integer.class), convertTo(deque.removeFirst(), Integer.class), convertTo(deque.removeFirst(), Integer.class), convertTo(deque.removeFirst(), Integer.class) }
+      };            
+    }     
+    else if(type.equals("name") || type.equals("Name") || type.equals("string"))
+    {
+      return convertTo(deque.removeFirst(), String.class);
+    }
+    else if(type.equals("double"))
+    {
+      return convertTo(deque.removeFirst(), Double.class); 
+    }
+    else
+    {
+      throw new Exception("TODO implementation of type: "+type);
+    }
+  }
+
 }
 
 public static class ColladaSource extends ColladaPart
@@ -760,9 +1426,9 @@ public static class ColladaSource extends ColladaPart
   protected ColladaTechniqueCommonInSource techniqueCommon = null;
   protected List<ColladaTechnique> colladaTechniqueList = new ArrayList<ColladaTechnique>();
   
-  public ColladaSource(PApplet pApplet, XML source) throws Exception
+  public ColladaSource(PApplet pApplet, XML source, ColladaPart parent) throws Exception
   {
-    super(pApplet, source);
+    super(pApplet, source, parent);
     
     id = parseAttribute(source, "id", String.class);
     name = parseAttribute(source, "name", String.class);
@@ -782,6 +1448,11 @@ public static class ColladaSource extends ColladaPart
     return techniqueCommon;
   }
   
+  public Integer getCount()
+  {
+    return ((ColladaTechniqueCommonInSource)this.getTechnique()).getCount();    
+  }
+  
   public Map<String, Object> getUsingTechnique(Integer index) throws Exception
   {
     return ((ColladaTechniqueCommonInSource)this.getTechnique()).getUsingAccessor(index);
@@ -795,9 +1466,9 @@ public static class ColladaInput extends ColladaPart
   protected String source = null;
   protected Integer set = null;
   
-  public ColladaInput(PApplet pApplet, XML input) throws Exception
+  public ColladaInput(PApplet pApplet, XML input, ColladaPart parent) throws Exception
   {
-    super(pApplet, input);
+    super(pApplet, input, parent);
     
     offset = parseAttribute(input, "offset", Integer.class);
     semantic = parseAttribute(input, "semantic", String.class);
@@ -805,22 +1476,44 @@ public static class ColladaInput extends ColladaPart
     set = parseAttribute(input, "set", Integer.class);
   }
   
-  public Map<String, Map<String, Object>> getUsingInput(Integer index) throws Exception
+  public ColladaSource getSource()
   {
-    Class<?> type = classByURL(source);
-    if(type == ColladaSource.class)
+    return (ColladaSource)getByURL(source);
+  }
+  
+  public Integer getCount() throws Exception
+  {
+    ColladaPart part = getByURL(source);
+    if(part.getClass() == ColladaSource.class)
     {
-      Map<String, Map<String, Object>> map = new HashMap<String, Map<String, Object>>();
-      map.put(semantic,getByURL(source, ColladaSource.class).getUsingTechnique(index));
-      return map;
+      return ((ColladaSource)part).getCount();
     }
-    else if(type == ColladaVertices.class)
+    else if(part.getClass() == ColladaVertices.class)
     {
-      return getByURL(source, ColladaVertices.class).getUsingVertices(index);
+      return ((ColladaVertices)part).getCount();
     }
     else
     {
-      return null;
+      throw new Exception("TODO ColladaInput->getCount()");
+    }    
+  }
+  
+  public Map<String, Map<String, Object>> getUsingInput(Integer index) throws Exception
+  {
+    ColladaPart part = getByURL(source);
+    if(part.getClass() == ColladaSource.class)
+    {
+      Map<String, Map<String, Object>> map = new HashMap<String, Map<String, Object>>();
+      map.put(semantic,((ColladaSource)part).getUsingTechnique(index));
+      return map;
+    }
+    else if(part.getClass() == ColladaVertices.class)
+    {
+      return ((ColladaVertices)part).getUsingVertices(index);
+    }
+    else
+    {
+      throw new Exception("TODO ColladaInput->getUsingInput(...)");
     }
   }
   
@@ -846,9 +1539,9 @@ public static class ColladaExtra extends ColladaPart
   protected ColladaAsset asset = null;
   protected List<ColladaTechnique> techniqueList = new ArrayList<ColladaTechnique>();
  
-  public ColladaExtra(PApplet pApplet, XML extra) throws Exception
+  public ColladaExtra(PApplet pApplet, XML extra, ColladaPart parent) throws Exception
   {
-    super(pApplet, extra);
+    super(pApplet, extra, parent);
     id = parseAttribute(extra, "id", String.class);
     name = parseAttribute(extra, "name", String.class);
     type = parseAttribute(extra, "type", String.class);
@@ -860,9 +1553,9 @@ public static class ColladaExtra extends ColladaPart
 
 public static abstract class ColladaAbstractTechnique extends ColladaPart
 {
-  public ColladaAbstractTechnique(PApplet pApplet, XML abstractTechnique) throws Exception
+  public ColladaAbstractTechnique(PApplet pApplet, XML abstractTechnique, ColladaPart parent) throws Exception
   {
-    super(pApplet, abstractTechnique);
+    super(pApplet, abstractTechnique, parent);
   }
 }
 
@@ -871,9 +1564,9 @@ public static class ColladaTechnique extends ColladaAbstractTechnique
   protected String profile = null;
   protected String xmlns = null;  
   
-  public ColladaTechnique(PApplet pApplet, XML technique) throws Exception
+  public ColladaTechnique(PApplet pApplet, XML technique, ColladaPart parent) throws Exception
   {
-    super(pApplet, technique);
+    super(pApplet, technique, parent);
     profile = parseAttribute(technique, "profile", String.class);
     xmlns = parseAttribute(technique, "xmlns", String.class);
   }
@@ -881,80 +1574,80 @@ public static class ColladaTechnique extends ColladaAbstractTechnique
 
 public static class ColladaTechniqueCommon extends ColladaAbstractTechnique
 {
-  public ColladaTechniqueCommon(PApplet pApplet, XML techniqueCommon) throws Exception
+  public ColladaTechniqueCommon(PApplet pApplet, XML techniqueCommon, ColladaPart parent) throws Exception
   {
-    super(pApplet, techniqueCommon);
+    super(pApplet, techniqueCommon, parent);
   }
 }
 
 public static class ColladaTechniqueCommonInBindMaterial extends ColladaTechniqueCommon 
 {
-  public ColladaTechniqueCommonInBindMaterial(PApplet pApplet, XML techniqueCommonInBindMaterial) throws Exception
+  public ColladaTechniqueCommonInBindMaterial(PApplet pApplet, XML techniqueCommonInBindMaterial, ColladaPart parent) throws Exception
   {
-    super(pApplet, techniqueCommonInBindMaterial);
+    super(pApplet, techniqueCommonInBindMaterial, parent);
     PApplet.println("TODO ColladaTechniqueCommonInBindMaterial");
   }
 }
 
 public static class ColladaTechniqueCommonInInstanceRigidBody extends ColladaTechniqueCommon 
 {
-  public ColladaTechniqueCommonInInstanceRigidBody(PApplet pApplet, XML techniqueCommonInInstanceRigidBody) throws Exception
+  public ColladaTechniqueCommonInInstanceRigidBody(PApplet pApplet, XML techniqueCommonInInstanceRigidBody, ColladaPart parent) throws Exception
   {
-    super(pApplet, techniqueCommonInInstanceRigidBody);
+    super(pApplet, techniqueCommonInInstanceRigidBody, parent);
     PApplet.println("TODO ColladaTechniqueCommonInInstanceRigidBody");
   }
 }
 
 public static class ColladaTechniqueCommonInLight extends ColladaTechniqueCommon 
 {
-  public ColladaTechniqueCommonInLight(PApplet pApplet, XML techniqueCommonInLight) throws Exception
+  public ColladaTechniqueCommonInLight(PApplet pApplet, XML techniqueCommonInLight, ColladaPart parent) throws Exception
   {
-    super(pApplet, techniqueCommonInLight);
+    super(pApplet, techniqueCommonInLight, parent);
     PApplet.println("TODO ColladaTechniqueCommonInLight");
   }
 }
 
 public static class ColladaTechniqueCommonInOptics extends ColladaTechniqueCommon 
 {
-  public ColladaTechniqueCommonInOptics(PApplet pApplet, XML techniqueCommonInOptics) throws Exception
+  public ColladaTechniqueCommonInOptics(PApplet pApplet, XML techniqueCommonInOptics, ColladaPart parent) throws Exception
   {
-    super(pApplet, techniqueCommonInOptics);
+    super(pApplet, techniqueCommonInOptics, parent);
     PApplet.println("TODO ColladaTechniqueCommonInOptics");
   }
 }
 
 public static class ColladaTechniqueCommonInPhysicsMaterial extends ColladaTechniqueCommon 
 {
-  public ColladaTechniqueCommonInPhysicsMaterial(PApplet pApplet, XML techniqueCommonInPhysicsMaterial) throws Exception
+  public ColladaTechniqueCommonInPhysicsMaterial(PApplet pApplet, XML techniqueCommonInPhysicsMaterial, ColladaPart parent) throws Exception
   {
-    super(pApplet, techniqueCommonInPhysicsMaterial);
+    super(pApplet, techniqueCommonInPhysicsMaterial, parent);
     PApplet.println("TODO ColladaTechniqueCommonInPhysicsMaterial");
   }
 }
 
 public static class ColladaTechniqueCommonInPhysicsScene extends ColladaTechniqueCommon 
 {
-  public ColladaTechniqueCommonInPhysicsScene(PApplet pApplet, XML techniqueCommonInPhysicsScene) throws Exception
+  public ColladaTechniqueCommonInPhysicsScene(PApplet pApplet, XML techniqueCommonInPhysicsScene, ColladaPart parent) throws Exception
   {
-    super(pApplet, techniqueCommonInPhysicsScene);
+    super(pApplet, techniqueCommonInPhysicsScene, parent);
     PApplet.println("TODO ColladaTechniqueCommonInPhysicsScene");
   }
 }
 
 public static class ColladaTechniqueCommonInRigidBody extends ColladaTechniqueCommon 
 {
-  public ColladaTechniqueCommonInRigidBody(PApplet pApplet, XML techniqueCommonInRigidBody) throws Exception
+  public ColladaTechniqueCommonInRigidBody(PApplet pApplet, XML techniqueCommonInRigidBody, ColladaPart parent) throws Exception
   {
-    super(pApplet, techniqueCommonInRigidBody);
+    super(pApplet, techniqueCommonInRigidBody, parent);
     PApplet.println("TODO ColladaTechniqueCommonInRigidBody");
   }
 }
 
 public static class ColladaTechniqueCommonInRigidConstraint extends ColladaTechniqueCommon 
 {
-  public ColladaTechniqueCommonInRigidConstraint(PApplet pApplet, XML techniqueCommonInRigidConstraint) throws Exception
+  public ColladaTechniqueCommonInRigidConstraint(PApplet pApplet, XML techniqueCommonInRigidConstraint, ColladaPart parent) throws Exception
   {
-    super(pApplet, techniqueCommonInRigidConstraint);
+    super(pApplet, techniqueCommonInRigidConstraint, parent);
     PApplet.println("TODO ColladaTechniqueCommonInRigidConstraint");
   }
 }
@@ -963,9 +1656,9 @@ public static class ColladaTechniqueCommonInSource extends ColladaTechniqueCommo
 {
   protected ColladaAccessor accessor = null;
   
-  public ColladaTechniqueCommonInSource(PApplet pApplet, XML techniqueCommonInSource) throws Exception
+  public ColladaTechniqueCommonInSource(PApplet pApplet, XML techniqueCommonInSource, ColladaPart parent) throws Exception
   {
-    super(pApplet, techniqueCommonInSource);
+    super(pApplet, techniqueCommonInSource, parent);
     
     accessor = parseChild(techniqueCommonInSource, "accessor", ColladaAccessor.class);
   }
@@ -973,6 +1666,11 @@ public static class ColladaTechniqueCommonInSource extends ColladaTechniqueCommo
   public ColladaAccessor getAccessor()
   {
     return accessor;
+  }
+  
+  public Integer getCount()
+  {
+    return this.getAccessor().getCount();
   }
   
   public Map<String, Object> getUsingAccessor(Integer index) throws Exception
@@ -985,9 +1683,9 @@ public static class ColladaTechniqueCommonInSource extends ColladaTechniqueCommo
 
 public static class ColladaControlVertices extends ColladaPart
 {
-  public ColladaControlVertices(PApplet pApplet, XML controlVertices) throws Exception
+  public ColladaControlVertices(PApplet pApplet, XML controlVertices, ColladaPart parent) throws Exception
   {
-    super(pApplet, controlVertices);
+    super(pApplet, controlVertices, parent);
     PApplet.println("TODO ColladaControlVertices");
   }
 }
@@ -1003,9 +1701,9 @@ public static class ColladaGeometry extends ColladaPart
   protected ColladaSpline spline = null;
   protected List<ColladaExtra> extraList = new ArrayList<ColladaExtra>();  
   
-  public ColladaGeometry(PApplet pApplet, XML geometry) throws Exception
+  public ColladaGeometry(PApplet pApplet, XML geometry, ColladaPart parent) throws Exception
   {
-    super(pApplet, geometry);
+    super(pApplet, geometry, parent);
     
     id = parseAttribute(geometry, "id", String.class);
     name = parseAttribute(geometry, "name", String.class);
@@ -1016,6 +1714,11 @@ public static class ColladaGeometry extends ColladaPart
     spline = parseChild(geometry, "spline", ColladaSpline.class);
     parseChildren(geometry, "extra", ColladaExtra.class, extraList);
   }
+  
+  public ColladaMesh getMesh()
+  {
+    return mesh;
+  } 
   
   public void draw() throws Exception
   {
@@ -1035,9 +1738,9 @@ public static class ColladaInstanceGeometry extends ColladaPart
   //protected ColladaBindMaterial bindMaterial = null;
   protected List<ColladaExtra> extraList = new ArrayList<ColladaExtra>();
   
-  public ColladaInstanceGeometry(PApplet pApplet, XML instanceGeometry) throws Exception
+  public ColladaInstanceGeometry(PApplet pApplet, XML instanceGeometry, ColladaPart parent) throws Exception
   {
-    super(pApplet, instanceGeometry);
+    super(pApplet, instanceGeometry, parent);
     
     sid = parseAttribute(instanceGeometry,"sid",String.class);
     name = parseAttribute(instanceGeometry,"name",String.class);
@@ -1049,7 +1752,7 @@ public static class ColladaInstanceGeometry extends ColladaPart
   
   public void draw() throws Exception
   {
-    getByURL(url, ColladaGeometry.class).draw();
+    ((ColladaGeometry)getByURL(url)).draw();
   }
 }
 
@@ -1062,9 +1765,9 @@ public static class ColladaLibraryGeometries extends ColladaLibrary
   protected List<ColladaGeometry> geometryList = new ArrayList<ColladaGeometry>();
   protected List<ColladaExtra> extraList = new ArrayList<ColladaExtra>();
   
-  public ColladaLibraryGeometries(PApplet pApplet, XML libraryGeometries) throws Exception
+  public ColladaLibraryGeometries(PApplet pApplet, XML libraryGeometries, ColladaPart parent) throws Exception
   {
-    super(pApplet, libraryGeometries);
+    super(pApplet, libraryGeometries, parent);
     
     id = parseAttribute(libraryGeometries, "id", String.class);
     name = parseAttribute(libraryGeometries, "name", String.class);
@@ -1077,18 +1780,18 @@ public static class ColladaLibraryGeometries extends ColladaLibrary
 
 public static class ColladaLines extends ColladaPart
 {
-  public ColladaLines(PApplet pApplet, XML lines) throws Exception
+  public ColladaLines(PApplet pApplet, XML lines, ColladaPart parent) throws Exception
   {
-    super(pApplet, lines);
+    super(pApplet, lines, parent);
     PApplet.println("TODO ColladaLines");
   }
 }
 
 public static class ColladaLineStrips extends ColladaPart
 {
-  public ColladaLineStrips(PApplet pApplet, XML lineStrips) throws Exception
+  public ColladaLineStrips(PApplet pApplet, XML lineStrips, ColladaPart parent) throws Exception
   {
-    super(pApplet, lineStrips);
+    super(pApplet, lineStrips, parent);
     PApplet.println("TODO ColladaLineStrips");
   }
 }
@@ -1106,9 +1809,9 @@ public static class ColladaMesh extends ColladaPart
   protected List<ColladaTriStrips> triStripsList = new ArrayList<ColladaTriStrips>();
   protected List<ColladaExtra> extraList = new ArrayList<ColladaExtra>(); 
   
-  public ColladaMesh(PApplet pApplet, XML mesh) throws Exception
+  public ColladaMesh(PApplet pApplet, XML mesh, ColladaPart parent) throws Exception
   {
-    super(pApplet, mesh);
+    super(pApplet, mesh, parent);
     
     parseChildren(mesh, "source", ColladaSource.class, sourceList);
     vertices = parseChild(mesh, "vertices", ColladaVertices.class);
@@ -1120,6 +1823,11 @@ public static class ColladaMesh extends ColladaPart
     parseChildren(mesh, "trifans", ColladaTriFans.class, triFansList);
     parseChildren(mesh, "tristrips", ColladaTriStrips.class, triStripsList);
     parseChildren(mesh, "extra", ColladaExtra.class, extraList);
+  }
+  
+  public ColladaVertices getVertices()
+  {
+    return vertices;
   }
   
   public void draw() throws Exception
@@ -1135,9 +1843,9 @@ public static class ColladaP extends ColladaPart
 {
   protected List<Integer> content = new ArrayList<Integer>();
   
-  public ColladaP(PApplet pApplet, XML p) throws Exception
+  public ColladaP(PApplet pApplet, XML p, ColladaPart parent) throws Exception
   {
-    super(pApplet, p);
+    super(pApplet, p, parent);
     
     for(String value : p.getContent().split("\\s+"))
     {
@@ -1156,27 +1864,27 @@ public static class ColladaP extends ColladaPart
 
 public static class ColladaPolygons extends ColladaPart
 {
-  public ColladaPolygons(PApplet pApplet, XML polygons) throws Exception
+  public ColladaPolygons(PApplet pApplet, XML polygons, ColladaPart parent) throws Exception
   {
-    super(pApplet, polygons);
+    super(pApplet, polygons, parent);
     PApplet.println("TODO ColladaPolygons");
   }
 }
 
 public static class ColladaPolyList extends ColladaPart
 {
-  public ColladaPolyList(PApplet pApplet, XML polyList) throws Exception
+  public ColladaPolyList(PApplet pApplet, XML polyList, ColladaPart parent) throws Exception
   {
-    super(pApplet, polyList);
+    super(pApplet, polyList, parent);
     PApplet.println("TODO ColladaPolyList");
   }
 }
 
 public static class ColladaSpline extends ColladaPart
 {
-  public ColladaSpline(PApplet pApplet, XML spline) throws Exception
+  public ColladaSpline(PApplet pApplet, XML spline, ColladaPart parent) throws Exception
   {
-    super(pApplet, spline);
+    super(pApplet, spline, parent);
     PApplet.println("TODO ColladaSpline");
   }
 }
@@ -1192,11 +1900,12 @@ public static class ColladaTriangles extends ColladaPart
   protected List<ColladaExtra> extraList = new ArrayList<ColladaExtra>();
  
   protected Integer maxOffset = null;
-  protected Map<Integer, ColladaInput> inputMap = new HashMap<Integer, ColladaInput>(); 
+  protected Map<Integer, ColladaInput> inputMap = new HashMap<Integer, ColladaInput>();
+  protected PImage image = pApplet.loadImage("texturka.png");
   
-  public ColladaTriangles(PApplet pApplet, XML triangles) throws Exception
+  public ColladaTriangles(PApplet pApplet, XML triangles, ColladaPart parent) throws Exception
   {
-    super(pApplet, triangles);
+    super(pApplet, triangles, parent);
     
     name = parseAttribute(triangles, "name", String.class);
     count = parseAttribute(triangles, "count", Integer.class);
@@ -1227,6 +1936,8 @@ public static class ColladaTriangles extends ColladaPart
   {
     pApplet.beginShape(pApplet.TRIANGLES);
     
+    pApplet.texture(image);
+    
     List<Integer> t = p.getContent();
     
     for(Integer triangleIndex = 0; triangleIndex < count; ++triangleIndex)
@@ -1234,6 +1945,7 @@ public static class ColladaTriangles extends ColladaPart
       for(Integer vertexIndex = 0; vertexIndex < 3; ++vertexIndex)
       {
         Map<String, Map<String, Object>> map = new HashMap<String, Map<String, Object>>();
+        Integer vIndex = null;
       
         for(Integer offset = 0; offset <= maxOffset; ++offset)
         {
@@ -1242,9 +1954,12 @@ public static class ColladaTriangles extends ColladaPart
           {
             continue;
           }
+          
           map.putAll(input.getUsingInput(t.get(triangleIndex*3*(maxOffset+1) + vertexIndex*(maxOffset+1) + offset)));
         }
-        pApplet.vertex((Float)map.get("POSITION").get("X"), (Float)map.get("POSITION").get("Y"), (Float)map.get("POSITION").get("Z"));
+        
+        pApplet.normal((Float)map.get("NORMAL").get("X"), (Float)map.get("NORMAL").get("Y"), (Float)map.get("NORMAL").get("Z"));
+        pApplet.vertex((Float)map.get("POSITION").get("X"), (Float)map.get("POSITION").get("Y"), (Float)map.get("POSITION").get("Z"), (Float)map.get("TEXCOORD").get("S"), 1.0-(Float)map.get("TEXCOORD").get("T"));
       }  
     }
     
@@ -1254,18 +1969,18 @@ public static class ColladaTriangles extends ColladaPart
 
 public static class ColladaTriFans extends ColladaPart
 {
-  public ColladaTriFans(PApplet pApplet, XML triFans) throws Exception
+  public ColladaTriFans(PApplet pApplet, XML triFans, ColladaPart parent) throws Exception
   {
-    super(pApplet, triFans);
+    super(pApplet, triFans, parent);
     PApplet.println("TODO ColladaTriFans");
   }
 }
 
 public static class ColladaTriStrips extends ColladaPart
 {
-  public ColladaTriStrips(PApplet pApplet, XML triStrips) throws Exception
+  public ColladaTriStrips(PApplet pApplet, XML triStrips, ColladaPart parent) throws Exception
   {
-    super(pApplet, triStrips);
+    super(pApplet, triStrips, parent);
     PApplet.println("TODO ColladaTriStrips");
   }
 }
@@ -1278,15 +1993,41 @@ public static class ColladaVertices extends ColladaPart
   protected List<ColladaInput> inputList = new ArrayList<ColladaInput>();
   protected List<ColladaExtra> extraList = new ArrayList<ColladaExtra>();
   
-  public ColladaVertices(PApplet pApplet, XML vertices) throws Exception
+  public ColladaVertices(PApplet pApplet, XML vertices, ColladaPart parent) throws Exception
   {
-    super(pApplet, vertices);
+    super(pApplet, vertices, parent);
     
     id = parseAttribute(vertices, "id", String.class);
     name = parseAttribute(vertices, "name", String.class);
     
     parseChildren(vertices, "input", ColladaInput.class, inputList);
     parseChildren(vertices, "extra", ColladaExtra.class, extraList);
+  }
+  
+  public ColladaSource getPositionsSource() throws Exception
+  {
+    for(ColladaInput input : inputList)
+    {
+      if(input.getSemantic().equals("POSITION"))
+      {
+        return input.getSource();
+      }
+    }
+    throw new Exception("Position input not found");
+  }
+  
+  public Integer getCount() throws Exception
+  {
+    ColladaInput positions = null;
+    for(ColladaInput input : inputList)
+    {
+      if(input.getSemantic().equals("POSITIONS"))
+      {
+        positions = input;
+        break;
+      }
+    }
+    return positions.getCount();
   }
   
   public Map<String, Map<String, Object>> getUsingVertices(Integer index) throws Exception
@@ -1304,72 +2045,72 @@ public static class ColladaVertices extends ColladaPart
 
 public static class ColladaAmbient extends ColladaPart
 {
-  public ColladaAmbient(PApplet pApplet, XML ambient) throws Exception
+  public ColladaAmbient(PApplet pApplet, XML ambient, ColladaPart parent) throws Exception
   {
-    super(pApplet, ambient);
+    super(pApplet, ambient, parent);
     PApplet.println("TODO ColladaAmbient");
   }
 }
 
 public static class ColladaColor extends ColladaPart
 {
-  public ColladaColor(PApplet pApplet, XML kolor) throws Exception
+  public ColladaColor(PApplet pApplet, XML kolor, ColladaPart parent) throws Exception
   {
-    super(pApplet, kolor);
+    super(pApplet, kolor, parent);
     PApplet.println("TODO ColladaColor");
   }
 }
 
 public static class ColladaDirectional extends ColladaPart
 {
-  public ColladaDirectional(PApplet pApplet, XML directional) throws Exception
+  public ColladaDirectional(PApplet pApplet, XML directional, ColladaPart parent) throws Exception
   {
-    super(pApplet, directional);
+    super(pApplet, directional, parent);
     PApplet.println("TODO ColladaDirectional");
   }
 }
 
 public static class ColladaInstanceLight extends ColladaPart
 {
-  public ColladaInstanceLight(PApplet pApplet, XML instanceLight) throws Exception
+  public ColladaInstanceLight(PApplet pApplet, XML instanceLight, ColladaPart parent) throws Exception
   {
-    super(pApplet, instanceLight);
+    super(pApplet, instanceLight, parent);
     PApplet.println("TODO ColladaInstanceLight");
   }
 }
 
 public static class ColladaLibraryLights extends ColladaLibrary
 {
-  public ColladaLibraryLights(PApplet pApplet, XML libraryLights) throws Exception
+  public ColladaLibraryLights(PApplet pApplet, XML libraryLights, ColladaPart parent) throws Exception
   {
-    super(pApplet, libraryLights);
+    super(pApplet, libraryLights, parent);
     PApplet.println("TODO ColladaLibraryLights");
   }
 }
 
 public static class ColladaLight extends ColladaPart
 {
-  public ColladaLight(PApplet pApplet, XML light) throws Exception
+  public ColladaLight(PApplet pApplet, XML light, ColladaPart parent) throws Exception
   {
-    super(pApplet, light);
+    super(pApplet, light, parent);
     PApplet.println("TODO ColladaLight");
   }
 }
 
 public static class ColladaPoint extends ColladaPart
 {
-  public ColladaPoint(PApplet pApplet, XML point) throws Exception
+  public ColladaPoint(PApplet pApplet, XML point, ColladaPart parent) throws Exception
   {
-    super(pApplet, point);
+    super(pApplet, point, parent);
     PApplet.println("TODO ColladaPoint");
   }
 }
 
 public static class ColladaSpot extends ColladaPart
 {
-  public ColladaSpot(PApplet pApplet, XML spot) throws Exception
+  public ColladaSpot(PApplet pApplet, XML spot, ColladaPart parent) throws Exception
   {
-    super(pApplet, spot);
+    super(pApplet, spot, parent);
     PApplet.println("TODO ColladaSpot");
   }
 }
@@ -1388,9 +2129,9 @@ public static class ColladaAsset extends ColladaPart
   protected ColladaUnit unit = null;
   protected ColladaUpAxis upAxis = null;
   
-  public ColladaAsset(PApplet pApplet, XML asset) throws Exception
+  public ColladaAsset(PApplet pApplet, XML asset, ColladaPart parent) throws Exception
   {
-    super(pApplet, asset);
+    super(pApplet, asset, parent);
     contributor = parseChild(asset, "contributor", ColladaContributor.class);
     created = parseChild(asset, "created", ColladaCreated.class);
     keywords = parseChild(asset, "keywords", ColladaKeywords.class);
@@ -1407,9 +2148,9 @@ public static class ColladaAuthor extends ColladaPart
 {
   protected String content = null;
   
-  public ColladaAuthor(PApplet pApplet, XML author) throws Exception
+  public ColladaAuthor(PApplet pApplet, XML author, ColladaPart parent) throws Exception
   {
-    super(pApplet, author);
+    super(pApplet, author, parent);
     content = author.getContent();
   }
 }
@@ -1418,9 +2159,9 @@ public static class ColladaAuthoringTool extends ColladaPart
 {
   protected String content = null;
   
-  public ColladaAuthoringTool(PApplet pApplet, XML authoringTool) throws Exception
+  public ColladaAuthoringTool(PApplet pApplet, XML authoringTool, ColladaPart parent) throws Exception
   {
-    super(pApplet, authoringTool);
+    super(pApplet, authoringTool, parent);
     content = authoringTool.getContent();
   }
 }
@@ -1450,9 +2191,9 @@ public static class Collada extends ColladaPart
   protected ColladaScene scene = null;
   protected List<ColladaExtra> extraList = new ArrayList<ColladaExtra>();
   
-  public Collada(PApplet pApplet, XML collada) throws Exception
-  {
-    super(pApplet, collada);
+  public Collada(PApplet pApplet, XML collada, ColladaPart parent) throws Exception
+  { 
+    super(pApplet, collada, parent);
     version = parseAttribute(collada, "version", String.class);
     xmlns = parseAttribute(collada, "xmlns", String.class);
     base = parseAttribute(collada, "base", String.class);
@@ -1481,15 +2222,23 @@ public static class Collada extends ColladaPart
   {
     return scene;
   }
+  
+  public void run() throws Exception
+  {
+    for(ColladaLibraryAnimations libraryAnimations : libraryAnimationsList)
+    {
+      libraryAnimations.run();
+    }
+  }
 }
 
 public static class ColladaComments extends ColladaPart
 {
   protected String content = null;
   
-  public ColladaComments(PApplet pApplet, XML comments) throws Exception
+  public ColladaComments(PApplet pApplet, XML comments, ColladaPart parent) throws Exception
   {
-    super(pApplet, comments);
+    super(pApplet, comments, parent);
     content = comments.getContent();
   }
 }
@@ -1502,9 +2251,9 @@ public static class ColladaContributor extends ColladaPart
   protected ColladaCopyright copyright = null;
   protected ColladaSourceData sourceData = null;
   
-  public ColladaContributor(PApplet pApplet, XML contributor) throws Exception
+  public ColladaContributor(PApplet pApplet, XML contributor, ColladaPart parent) throws Exception
   {
-    super(pApplet, contributor);
+    super(pApplet, contributor, parent);
     author = parseChild(contributor, "author", ColladaAuthor.class);
     authoringTool = parseChild(contributor, "authoring_tool", ColladaAuthoringTool.class);
     comments = parseChild(contributor, "comments", ColladaComments.class);
@@ -1515,9 +2264,9 @@ public static class ColladaContributor extends ColladaPart
 
 public static class ColladaCopyright extends ColladaPart
 {
-  public ColladaCopyright(PApplet pApplet, XML copyright) throws Exception
+  public ColladaCopyright(PApplet pApplet, XML copyright, ColladaPart parent) throws Exception
   {
-    super(pApplet, copyright);
+    super(pApplet, copyright, parent);
     PApplet.println("TODO ColladaCopyright");
   }
 }
@@ -1526,9 +2275,9 @@ public static class ColladaCreated extends ColladaPart
 {
   protected String content = null;
   
-  public ColladaCreated(PApplet pApplet, XML created) throws Exception
+  public ColladaCreated(PApplet pApplet, XML created, ColladaPart parent) throws Exception
   {
-    super(pApplet, created);
+    super(pApplet, created, parent);
     content = created.getContent();
   }
 }
@@ -1537,9 +2286,9 @@ public static class ColladaKeywords extends ColladaPart
 {
   protected String content = null;
   
-  public ColladaKeywords(PApplet pApplet, XML keywords) throws Exception
+  public ColladaKeywords(PApplet pApplet, XML keywords, ColladaPart parent) throws Exception
   {
-    super(pApplet, keywords);
+    super(pApplet, keywords, parent);
     content = keywords.getContent();
   }
 }
@@ -1548,9 +2297,9 @@ public static class ColladaModified extends ColladaPart
 {
   protected String content = null;
   
-  public ColladaModified(PApplet pApplet, XML modified) throws Exception
+  public ColladaModified(PApplet pApplet, XML modified, ColladaPart parent) throws Exception
   {
-    super(pApplet, modified);
+    super(pApplet, modified, parent);
     content = modified.getContent();
   }
 }
@@ -1559,18 +2308,18 @@ public static class ColladaRevision extends ColladaPart
 {
   protected String content = null;
   
-  public ColladaRevision(PApplet pApplet, XML revision) throws Exception
+  public ColladaRevision(PApplet pApplet, XML revision, ColladaPart parent) throws Exception
   {
-    super(pApplet, revision);
+    super(pApplet, revision, parent);
     content = revision.getContent();
   }
 }
 
 public static class ColladaSourceData extends ColladaPart
 {
-  public ColladaSourceData(PApplet pApplet, XML sourceData) throws Exception
+  public ColladaSourceData(PApplet pApplet, XML sourceData, ColladaPart parent) throws Exception
   {
-    super(pApplet, sourceData);
+    super(pApplet, sourceData, parent);
     PApplet.println("TODO ColladaSourceData");
   }
 }
@@ -1579,9 +2328,9 @@ public static class ColladaSubject extends ColladaPart
 {
   protected String content = null;
   
-  public ColladaSubject(PApplet pApplet, XML subject) throws Exception
+  public ColladaSubject(PApplet pApplet, XML subject, ColladaPart parent) throws Exception
   {
-    super(pApplet, subject);
+    super(pApplet, subject, parent);
     content = subject.getContent();
   }
 }
@@ -1590,9 +2339,9 @@ public static class ColladaTitle extends ColladaPart
 {
   protected String content = null;
   
-  public ColladaTitle(PApplet pApplet, XML title) throws Exception
+  public ColladaTitle(PApplet pApplet, XML title, ColladaPart parent) throws Exception
   {
-    super(pApplet, title);
+    super(pApplet, title, parent);
     content = title.getContent();
   }
 }
@@ -1602,9 +2351,9 @@ public static class ColladaUnit extends ColladaPart
   protected String name = null;
   protected Float meter = null;
   
-  public ColladaUnit(PApplet pApplet, XML unit) throws Exception
+  public ColladaUnit(PApplet pApplet, XML unit, ColladaPart parent) throws Exception
   {
-    super(pApplet, unit);
+    super(pApplet, unit, parent);
     name = parseAttribute(unit, "name", String.class, "meter");
     meter = parseAttribute(unit, "meter", Float.class, 1.0);
   }
@@ -1614,9 +2363,9 @@ public static class ColladaUpAxis extends ColladaPart
 {
   protected String content = "Y_UP";
   
-  public ColladaUpAxis(PApplet pApplet, XML upAxis) throws Exception
+  public ColladaUpAxis(PApplet pApplet, XML upAxis, ColladaPart parent) throws Exception
   {
-    super(pApplet, upAxis);
+    super(pApplet, upAxis, parent);
     content = upAxis.getContent();
   }
 }
@@ -1628,9 +2377,9 @@ public static class ColladaEvaluateScene extends ColladaPart
   protected String name = null;
   //protected List<ColladaRender> renderList = new ArrayList<ColladaRender>();
   
-  public ColladaEvaluateScene(PApplet pApplet, XML evaluateScene) throws Exception
+  public ColladaEvaluateScene(PApplet pApplet, XML evaluateScene, ColladaPart parent) throws Exception
   {
-    super(pApplet, evaluateScene);
+    super(pApplet, evaluateScene, parent);
     
     name = parseAttribute(evaluateScene, "name", String.class);
   }
@@ -1638,9 +2387,9 @@ public static class ColladaEvaluateScene extends ColladaPart
 
 public static class ColladaInstanceNode extends ColladaPart
 {
-  public ColladaInstanceNode(PApplet pApplet, XML instanceNode) throws Exception
+  public ColladaInstanceNode(PApplet pApplet, XML instanceNode, ColladaPart parent) throws Exception
   {
-    super(pApplet, instanceNode);
+    super(pApplet, instanceNode, parent);
     PApplet.println("TODO ColladaInstanceNode");
   }
 }
@@ -1651,9 +2400,9 @@ public static class ColladaInstanceVisualScene extends ColladaPart
   protected String name = null;
   protected String url = null;
   
-  public ColladaInstanceVisualScene(PApplet pApplet, XML instanceVisualScene) throws Exception
+  public ColladaInstanceVisualScene(PApplet pApplet, XML instanceVisualScene, ColladaPart parent) throws Exception
   {
-    super(pApplet, instanceVisualScene);
+    super(pApplet, instanceVisualScene, parent);
     sid = parseAttribute(instanceVisualScene, "sid", String.class);
     name = parseAttribute(instanceVisualScene, "name", String.class);
     url = parseAttribute(instanceVisualScene, "url", String.class);
@@ -1661,15 +2410,15 @@ public static class ColladaInstanceVisualScene extends ColladaPart
   
   public void draw() throws Exception
   {
-    getByURL(url, ColladaVisualScene.class).draw();
+    ((ColladaVisualScene)getByURL(url)).draw();
   }
 }
 
 public static class ColladaLibraryNodes extends ColladaLibrary
 {
-  public ColladaLibraryNodes(PApplet pApplet, XML libraryNodes) throws Exception
+  public ColladaLibraryNodes(PApplet pApplet, XML libraryNodes, ColladaPart parent) throws Exception
   {
-    super(pApplet, libraryNodes);
+    super(pApplet, libraryNodes, parent);
     PApplet.println("TODO ColladaLibraryNodes");
   }
 }
@@ -1683,9 +2432,9 @@ public static class ColladaLibraryVisualScenes extends ColladaLibrary
   protected List<ColladaVisualScene> visualSceneList = new ArrayList<ColladaVisualScene>();
   protected List<ColladaExtra> extraList = new ArrayList<ColladaExtra>();
   
-  public ColladaLibraryVisualScenes(PApplet pApplet, XML libraryVisualScenes) throws Exception
+  public ColladaLibraryVisualScenes(PApplet pApplet, XML libraryVisualScenes, ColladaPart parent) throws Exception
   {
-    super(pApplet, libraryVisualScenes);
+    super(pApplet, libraryVisualScenes, parent);
     
     id = parseAttribute(libraryVisualScenes, "id", String.class);
     name = parseAttribute(libraryVisualScenes, "name", String.class);
@@ -1719,9 +2468,12 @@ public static class ColladaNode extends ColladaPart
   protected List<ColladaNode> nodeList = new ArrayList<ColladaNode>();
   protected List<ColladaExtra> extraList = new ArrayList<ColladaExtra>();
   
-  public ColladaNode(PApplet pApplet, XML node) throws Exception
+  protected ColladaNode parent = null;
+  
+  public ColladaNode(PApplet pApplet, XML node, ColladaNode parent) throws Exception
   {
-    super(pApplet, node);
+    super(pApplet, node, parent);
+    this.parent = parent;
     id = parseAttribute(node, "id", String.class);
     name = parseAttribute(node, "name", String.class);
     sid = parseAttribute(node, "sid", String.class);
@@ -1750,20 +2502,77 @@ public static class ColladaNode extends ColladaPart
     parseChildren(node, "instance_geometry", ColladaInstanceGeometry.class, instanceGeometryList);
     parseChildren(node, "instance_light", ColladaInstanceLight.class, instanceLightList);
     parseChildren(node, "instance_node", ColladaInstanceNode.class, instanceNodeList);
-    parseChildren(node, "node", ColladaNode.class, nodeList);
     parseChildren(node, "extra", ColladaExtra.class, extraList);
+    
+    /*
+    float mat[][] = getMatrix();
+    pApplet.println("---------------------------");
+    for(Integer i = 0; i < 4; ++i)
+    {
+      StringBuffer buffer = new StringBuffer();
+      for(Integer j = 0; j < 4; ++j)
+      {
+        buffer.append(String.valueOf(mat[i][j])+" ");
+      }
+      pApplet.println(buffer.toString());
+    }
+    pApplet.println("---------------------------");
+    */
+    
+    parseChildren(node, "node", ColladaNode.class, new Class<?>[] {ColladaNode.class}, new Object[] {this}, nodeList);
+  }
+  
+  public float[][] getMatrix()
+  {
+    float[][] m = Mat.identity(4);
+    
+    for(ColladaMatrix matrix : matrixList)
+    {
+      m = Mat.multiply(m, matrix.getContent());
+    }
+    
+    if(parent == null)
+    {
+      return m;
+    }
+    else
+    {
+      return Mat.multiply(parent.getMatrix(), m); 
+    }
   }
   
   public void draw() throws Exception
   {
     pApplet.pushMatrix();
+    if(type != null && type.equals("JOINT"))
+    {
+      //pApplet.sphere(1);
+    }
     for(ColladaMatrix matrix : matrixList)
     {
-      // apply matrix
+      float[][] m = matrix.getContent();
+      pApplet.applyMatrix(
+        m[0][0], m[0][1], m[0][2], m[0][3],
+        m[1][0], m[1][1], m[1][2], m[1][3],
+        m[2][0], m[2][1], m[2][2], m[2][3],
+        m[3][0], m[3][1], m[3][2], m[3][3]
+      ); 
+    }
+    if(type != null && type.equals("JOINT"))
+    {
+      //pApplet.sphere(1);
     }
     for(ColladaInstanceGeometry instanceGeometry : instanceGeometryList)
     {
       instanceGeometry.draw();
+    }
+    for(ColladaInstanceController instanceController : instanceControllerList)
+    {
+      instanceController.draw();
+    }
+    for(ColladaNode node : nodeList)
+    {
+      node.draw();
     }
     pApplet.popMatrix();
   }
@@ -1775,9 +2584,9 @@ public static class ColladaScene extends ColladaPart
   protected ColladaInstanceVisualScene instanceVisualScene = null;
   protected List<ColladaExtra> extraList = new ArrayList<ColladaExtra>();
   
-  public ColladaScene(PApplet pApplet, XML scene) throws Exception
+  public ColladaScene(PApplet pApplet, XML scene, ColladaPart parent) throws Exception
   {
-    super(pApplet, scene);
+    super(pApplet, scene, parent);
     //parseChildren(scene, "instance_physics_scene",ColladaInstancePhysicsScene.class,instancePhysicsSceneList);
     instanceVisualScene = parseChild(scene, "instance_visual_scene", ColladaInstanceVisualScene.class);
     parseChildren(scene, "extra",ColladaExtra.class,extraList);    
@@ -1802,14 +2611,14 @@ public static class ColladaVisualScene extends ColladaPart
   protected List<ColladaEvaluateScene> evaluateSceneList = new ArrayList<ColladaEvaluateScene>();
   protected List<ColladaExtra> extraList = new ArrayList<ColladaExtra>();
   
-  public ColladaVisualScene(PApplet pApplet, XML visualScene) throws Exception
+  public ColladaVisualScene(PApplet pApplet, XML visualScene, ColladaPart parent) throws Exception
   {
-    super(pApplet, visualScene);
+    super(pApplet, visualScene, parent);
     id = parseAttribute(visualScene, "id", String.class);
     name = parseAttribute(visualScene, "name", String.class);
     
     asset = parseChild(visualScene, "asset", ColladaAsset.class);
-    parseChildren(visualScene, "node", ColladaNode.class, nodeList);
+    parseChildren(visualScene, "node", ColladaNode.class, new Class<?>[] {ColladaNode.class}, new Object[] {null}, nodeList);
     parseChildren(visualScene, "evaluate_scene", ColladaEvaluateScene.class, evaluateSceneList);
     parseChildren(visualScene, "extra", ColladaExtra.class, extraList);
   }
@@ -1827,21 +2636,23 @@ public static class ColladaVisualScene extends ColladaPart
 
 public static class ColladaLookAt extends ColladaPart
 {
-  public ColladaLookAt(PApplet pApplet, XML lookAt) throws Exception
+  public ColladaLookAt(PApplet pApplet, XML lookAt, ColladaPart parent) throws Exception
   {
-    super(pApplet, lookAt);
+    super(pApplet, lookAt, parent);
     PApplet.println("TODO ColladaLookAt");
   }
 }
 
-public static class ColladaMatrix extends ColladaPart
+public static class ColladaMatrix extends ColladaPart implements HavingContent<float[][]>
 {
   protected String sid = null;
   protected float[][] content = new float[4][4];
   
-  public ColladaMatrix(PApplet pApplet, XML matrix) throws Exception
+  protected float[][] newContent = null;
+  
+  public ColladaMatrix(PApplet pApplet, XML matrix, ColladaPart parent) throws Exception
   {
-    super(pApplet, matrix);
+    super(pApplet, matrix, parent);
     
     sid = parseAttribute(matrix, "sid", String.class);
     
@@ -1852,48 +2663,71 @@ public static class ColladaMatrix extends ColladaPart
       if(value.length() > 0)
       {
         content[i][j] = Float.valueOf(value);
-        if(++i >= 4)
+        if(++j >= 4)
         {
-          i = 0;
-          ++j;
+          j = 0;
+          ++i;
         }
       }
     }
   }
+  
+  public void setContent(float[][] newContent)
+  {
+    this.newContent = newContent;
+  }
+  
+  public void reset()
+  {
+    newContent = null;
+  }
+  
+  public float[][] getContent()
+  {
+    if(newContent != null)
+    {      
+      return newContent;
+    }
+    else
+    {
+      return content;      
+    }
+  }
+  
 }
 
 public static class ColladaRotate extends ColladaPart
 {
-  public ColladaRotate(PApplet pApplet, XML rotate) throws Exception
+  public ColladaRotate(PApplet pApplet, XML rotate, ColladaPart parent) throws Exception
   {
-    super(pApplet, rotate);
+    super(pApplet, rotate, parent);
     PApplet.println("TODO ColladaRotate");
   }
 }
 
 public static class ColladaScale extends ColladaPart
 {
-  public ColladaScale(PApplet pApplet, XML scale) throws Exception
+  public ColladaScale(PApplet pApplet, XML scale, ColladaPart parent) throws Exception
   {
-    super(pApplet, scale);
+    super(pApplet, scale, parent);
     PApplet.println("TODO ColladaScale");
   }
 }
 
 public static class ColladaSkew extends ColladaPart
 {
-  public ColladaSkew(PApplet pApplet, XML skew) throws Exception
+  public ColladaSkew(PApplet pApplet, XML skew, ColladaPart parent) throws Exception
   {
-    super(pApplet, skew);
+    super(pApplet, skew, parent);
     PApplet.println("TODO ColladaSkew");
   }
 }
 
 public static class ColladaTranslate extends ColladaPart
 {
-  public ColladaTranslate(PApplet pApplet, XML translate) throws Exception
+  public ColladaTranslate(PApplet pApplet, XML translate, ColladaPart parent) throws Exception
   {
-    super(pApplet, translate);
+    super(pApplet, translate, parent);
     PApplet.println("TODO ColladaTranslate");
   }
 }

@@ -30,6 +30,12 @@
   <library_visual_scenes>
     <visual_scene id="scenaTestowa">
       <node id="wezelTestowy">
+        <matrix>
+          2.0 0.0 0.0 -100.0
+          0.0 1.0 0.0 0.0
+          0.0 0.0 1.0 0.0
+          0.0 0.0 0.0 1.0
+        </matrix>
         <instance_geometry url="#geometriaTestowa"/>
       </node>
     </visual_scene>

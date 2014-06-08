@@ -4726,8 +4726,9 @@ LINEAR LINEAR LINEAR LINEAR LINEAR LINEAR</Name_array>
           </technique>
         </extra>
       </node>
-      <node name="Object001" id="Object001" sid="Object001">
-        <matrix sid="matrix">1.000000 0.000000 0.000000 -31.506966 0.000000 0.000000 1.000000 6.582981 0.000000 -1.086375 0.000000 -3.854369 0.000000 0.000000 0.000000 1.000000</matrix>
+      <!--
+      <node name="glowa" id="glowa" sid="glowa">
+        <matrix sid="matrix">20.000000 0.000000 0.000000 0.000000 0.000000 0.000000 20.000000 0.000000 0.000000 -20.000000 0.000000 0.000000 0.000000 0.000000 0.000000 1.000000</matrix>
         <instance_geometry url="#glowka-lib">
           <bind_material>
             <technique_common>
@@ -4741,6 +4742,24 @@ LINEAR LINEAR LINEAR LINEAR LINEAR LINEAR</Name_array>
           </technique>
         </extra>
       </node>
+      -->
+      <!--
+      <node name="Object001" id="Object001" sid="Object001">
+        <matrix sid="matrix">1.000000 0.000000 0.000000 -31.506966 0.000000 0.000000 1.000000 6.582981 0.000000 -1.086375 0.000000 -3.854369 0.000000 0.000000 0.000000 1.000000</matrix>
+        <instance_geometry url="#Object001-lib">
+          <bind_material>
+            <technique_common>
+              <instance_material symbol="_01 - Default" target="#_01 - Default"/>
+            </technique_common>
+          </bind_material>
+        </instance_geometry>
+        <extra>
+          <technique profile="FCOLLADA">
+            <visibility>1.000000</visibility>
+          </technique>
+        </extra>
+      </node>
+      -->
       <node name="krengoslup" id="krengoslup" sid="krengoslup" type="JOINT">
         <matrix sid="matrix">0.000000 -0.000000 -1.000000 -0.000000 0.999735 -0.023035 0.000000 -0.308274 -0.023035 -0.999735 0.000000 0.425177 0.000000 0.000000 0.000000 1.000000</matrix>
         <extra>

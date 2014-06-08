@@ -57,18 +57,24 @@ public void setup()
   try
   {
     //orientation(PORTRAIT);
+    Collada collada = new Collada(this, this.loadXML("test.dae"), null);
     ketaiGesture = new KetaiGesture(this);
     controlP5 = new ControlP5(this);
-    mainView = new MainView(this);
-    menuView = new MenuView(this, controlP5);
-    matchingView = new MatchingView(this);
+    mainView = new MainView(this, collada);
+    menuView = new MenuView(this, collada, controlP5);
+    matchingView = new MatchingView(this, collada);
     defaultMatrix[0][3] = -width / 2;
     defaultMatrix[1][3] = -height / 2;
     defaultMatrix[2][3] = -630.4665;
   
     currentView = mainView;
+    textureMode(NORMAL);
     smooth();
+    strokeWeight(1);
     noStroke();
+    //stroke(0,0,255);
+    fill(255,255,255);
+    //noFill();
   }
   catch(Exception e)
   {
@@ -96,7 +102,8 @@ public void draw()
   {
     applyDefaultMatrix();
     background(0,0,0);
-    fill(255,255,255);
+    noStroke();
+    fill(255,255,255);    
     textFont(createFont("SansSerif",10));
     textAlign(LEFT, TOP);
     ByteArrayOutputStream stream = new ByteArrayOutputStream();
@@ -121,29 +128,46 @@ public boolean surfaceTouchEvent(MotionEvent event)
 public void mousePressed()
 {
   if(exception != null){return;}
-  oldMousePosition = new PVector(mouseX, mouseY);
+  try
+  {
+    currentView.mousePressed(new PVector(mouseX, mouseY));
+  }
+  catch(Exception e)
+  { 
+    exception = e;
+    draw();
+    noLoop();
+  }  
 }
 
 public void mouseReleased()
 {
   if(exception != null){return;}
-  oldMousePosition = null;
+  try
+  {
+    currentView.mouseReleased(new PVector(mouseX, mouseY));
+  }
+  catch(Exception e)
+  { 
+    exception = e;
+    draw();
+    noLoop();
+  }    
+  
 }
 
 public void mouseDragged()
 {
   if(exception != null){return;}
-  if(oldMousePosition != null)
+  try
   {
-    PVector currentMousePosition = new PVector(mouseX, mouseY);
-    PVector mousePositionDifference = PVector.sub(currentMousePosition, oldMousePosition);
-    
-    if(currentView == mainView)
-    {
-      ((MainView)currentView).addAngle((float)mousePositionDifference.x/10);
-    }
-    
-    oldMousePosition = currentMousePosition;
+    currentView.mouseDragged(new PVector(mouseX, mouseY));    
+  }
+  catch(Exception e)
+  { 
+    exception = e;
+    draw();
+    noLoop();
   }
 }
 
@@ -172,7 +196,7 @@ public void captureFaceAction()
 {
   if(currentView == menuView)
   {
-    menuView.captureFaceAction();
+    switchToView(matchingView);
   }
 }
 
