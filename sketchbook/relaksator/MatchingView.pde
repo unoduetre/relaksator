@@ -53,6 +53,16 @@ public static class MatchingView extends View
     else
     {
       pApplet.image(photo,(pApplet.width - previewWidth) / 2,(pApplet.height - previewHeight) / 2, previewWidth, previewHeight);
+      
+      ColladaGeometry geometry = ((ColladaGeometry)collada.getById("glowka-lib"));
+      ColladaFloatArray floatArray = ((ColladaTechniqueCommonInSource)geometry.getMesh().getTriangles().getTexcoordSource().getTechnique()).getAccessor().getSource(ColladaFloatArray.class);
+      List<Float> uv = floatArray.getContent();
+      pApplet.ellipseMode(pApplet.CENTER);
+      for(Integer i = 0; i < uv.size(); i += 2)
+      {
+        pApplet.ellipse((pApplet.width - previewWidth) / 2+previewWidth*uv.get(i), (pApplet.height - previewHeight) / 2+previewHeight*(1.0-uv.get(i+1)),1,1);
+      }
+      floatArray.setContent(uv); 
     }
   }  
   

@@ -1830,6 +1830,11 @@ public static class ColladaMesh extends ColladaPart
     return vertices;
   }
   
+  public ColladaTriangles getTriangles()
+  {
+    return trianglesList.get(0);
+  }
+  
   public void draw() throws Exception
   {
     for(ColladaTriangles triangles : trianglesList)
@@ -1901,7 +1906,8 @@ public static class ColladaTriangles extends ColladaPart
  
   protected Integer maxOffset = null;
   protected Map<Integer, ColladaInput> inputMap = new HashMap<Integer, ColladaInput>();
-  protected PImage image = pApplet.loadImage("texturka.png");
+  protected PImage image = null;
+  protected PImage newImage = null;
   
   public ColladaTriangles(PApplet pApplet, XML triangles, ColladaPart parent) throws Exception
   {
@@ -1914,6 +1920,8 @@ public static class ColladaTriangles extends ColladaPart
     parseChildren(triangles, "input", ColladaInput.class, inputList);
     p = parseChild(triangles, "p", ColladaP.class);
     parseChildren(triangles, "extra", ColladaExtra.class, extraList);
+    
+    image = pApplet.loadImage("texturka.png");
     
     maxOffset = 0;
     
@@ -1936,7 +1944,14 @@ public static class ColladaTriangles extends ColladaPart
   {
     pApplet.beginShape(pApplet.TRIANGLES);
     
-    pApplet.texture(image);
+    if(newImage != null)
+    {
+      pApplet.texture(newImage);
+    }
+    else
+    {
+      pApplet.texture(image);
+    }
     
     List<Integer> t = p.getContent();
     
@@ -1965,6 +1980,29 @@ public static class ColladaTriangles extends ColladaPart
     
     pApplet.endShape(); 
   }
+  
+  public void setImage(PImage img)
+  {
+    newImage = img;
+  }
+  
+  public void resetImage()
+  {
+    newImage = null;
+  }
+  
+  public ColladaSource getTexcoordSource() throws Exception
+  {
+    for(ColladaInput input : inputList)
+    {
+      if(input.getSemantic().equals("TEXCOORD"))
+      {
+        return input.getSource();
+      }
+    }
+    throw new Exception("Position input not found");
+  }
+  
 }
 
 public static class ColladaTriFans extends ColladaPart
