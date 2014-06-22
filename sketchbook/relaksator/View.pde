@@ -1,6 +1,6 @@
 public static abstract class View extends Widget
 {
-  protected PVector previousMousePosition;
+  protected PVector previousMousePosition = null;
   protected Collada collada = null;
   
   public View(PApplet pApplet, Collada collada)
@@ -26,6 +26,18 @@ public static abstract class View extends Widget
   public void mouseDragged(PVector mousePosition) throws Exception
   {
     previousMousePosition = mousePosition;    
+  }
+  
+  public void onFlick(PVector position, PVector delta, Float speed)
+  {
+  }
+  
+  public void onPinch(PVector position, Float distance)
+  {
+  }
+
+  public void onRotate(PVector position, Float angle)
+  {
   }  
 }
 

@@ -1921,7 +1921,7 @@ public static class ColladaTriangles extends ColladaPart
     p = parseChild(triangles, "p", ColladaP.class);
     parseChildren(triangles, "extra", ColladaExtra.class, extraList);
     
-    image = pApplet.loadImage("texturka.png");
+    image = pApplet.loadImage("tekstura.png");
     
     maxOffset = 0;
     

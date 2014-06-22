@@ -57,7 +57,7 @@ public void setup()
   try
   {
     //orientation(PORTRAIT);
-    Collada collada = new Collada(this, this.loadXML("test.dae"), null);
+    Collada collada = new Collada(this, this.loadXML("animacje.dae"), null);
     ketaiGesture = new KetaiGesture(this);
     controlP5 = new ControlP5(this);
     mainView = new MainView(this, collada);
@@ -69,6 +69,9 @@ public void setup()
   
     currentView = mainView;
     textureMode(NORMAL);
+    imageMode(CORNERS);
+    ellipseMode(CENTER);    
+    
     smooth();
     strokeWeight(1);
     noStroke();
@@ -123,6 +126,52 @@ public boolean surfaceTouchEvent(MotionEvent event)
 {
   super.surfaceTouchEvent(event);
   return ketaiGesture.surfaceTouchEvent(event);
+  
+}
+
+public void onFlick(float x, float y, float px, float py, float v)
+{
+  if(exception != null){return;}
+  try
+  {
+    currentView.onFlick(new PVector(x, y), new PVector(px, py), v);
+  }
+  catch(Exception e)
+  { 
+    exception = e;
+    draw();
+    noLoop();
+  }   
+}
+
+public void onPinch(float x, float y, float r)
+{
+  if(exception != null){return;}
+  try
+  {
+    currentView.onPinch(new PVector(x, y), r);
+  }
+  catch(Exception e)
+  { 
+    exception = e;
+    draw();
+    noLoop();
+  }     
+}
+
+public void onRotate(float x, float y, float a)
+{
+  if(exception != null){return;}
+  try
+  {
+    currentView.onRotate(new PVector(x, y), a);
+  }
+  catch(Exception e)
+  { 
+    exception = e;
+    draw();
+    noLoop();
+  }     
 }
 
 public void mousePressed()
@@ -152,8 +201,7 @@ public void mouseReleased()
     exception = e;
     draw();
     noLoop();
-  }    
-  
+  }
 }
 
 public void mouseDragged()
