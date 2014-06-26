@@ -32,6 +32,10 @@ public static abstract class View extends Widget
   {
   }
   
+  public void onDoubleTap(PVector position) throws Exception
+  {
+  }  
+  
   public void onFlick(PVector end, PVector start, Float speed) throws Exception
   {
   }

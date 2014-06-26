@@ -32,7 +32,7 @@ public static class MenuView extends View
     
     buttonNames = Arrays.asList("captureFaceAction","quitAction");
     buttonLabels = Arrays.asList("CAPTURE FACE", "QUIT");
-    fontSizes = Arrays.asList(79,67,56,47,39,32,27,23,19,16,13,11,9,8,7,5,4,3);
+    fontSizes = Arrays.asList(67,56,47,39,32,27,23,19,16,13,11,9,8,7,5,4,3);
     
     buttons = new ArrayList<Button>();
     

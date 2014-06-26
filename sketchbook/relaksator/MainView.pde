@@ -1,13 +1,17 @@
+import apwidgets.APMediaPlayer;
+
 public static class MainView extends View
 {
   protected ColladaScene scene = null; 
   protected Float angle = 0.0;
+  protected APMediaPlayer player = null;
   
   public MainView(PApplet pApplet, Collada collada) throws Exception
   {
     super(pApplet, collada);
 
     scene = collada.getScene();    
+    player = new APMediaPlayer(pApplet);
   }
   
   public Collada getCollada()
@@ -126,6 +130,8 @@ public static class MainView extends View
   {
     stopAnimation();
     startPunchAnimation();
+    player.setMediaFile("punch.mp3");
+    player.start();
   }
   
   public void onFlick(PVector end, PVector start, Float speed) throws Exception
@@ -135,23 +141,31 @@ public static class MainView extends View
     if(delta.x >= 0)
     {
       startLeftHookAnimation();
+      player.setMediaFile("lefthook.mp3");
+      player.start();
     }
     else
     {
       startRightHookAnimation();
+      player.setMediaFile("righthook.mp3");
+      player.start();
     }
   }
   
-  public void onPinch(PVector position, Float distance) throws Exception
+  public void onDoubleTap(PVector position) throws Exception
   {
     stopAnimation();
     startElectricityAnimation();
+    player.setMediaFile("electricity.mp3");
+    player.start();
   }
   
   public void onRotate(PVector position, Float angle) throws Exception
   {
     stopAnimation();
     startShakingAnimation();
+    player.setMediaFile("shaking.mp3");
+    player.start();    
   }    
  
 }

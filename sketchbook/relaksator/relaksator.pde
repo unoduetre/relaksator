@@ -51,9 +51,9 @@ public void setup()
     //orientation(PORTRAIT);
     Collada collada = new Collada(this, this.loadXML("model.dae"), null);
     ketaiGesture = new KetaiGesture(this);
-    controlP5 = new ControlP5(this);
+    //controlP5 = new ControlP5(this);
     mainView = new MainView(this, collada);
-    menuView = new MenuView(this, collada, controlP5);
+    //menuView = new MenuView(this, collada, controlP5);
     matchingView = new MatchingView(this, collada);
     defaultMatrix[0][3] = -width / 2;
     defaultMatrix[1][3] = -height / 2;
@@ -70,7 +70,7 @@ public void setup()
     //stroke(0,0,255);
     fill(255,255,255);
     //noFill();
-    frameRate(60);
+    frameRate(30);
   }
   catch(Exception e)
   {
@@ -130,6 +130,21 @@ public void onTap(float x, float y)
   try
   {
     currentView.onTap(new PVector(x, y));
+  }
+  catch(Exception e)
+  { 
+    exception = e;
+    draw();
+    noLoop();
+  }   
+}
+
+public void onDoubleTap(float x, float y)
+{
+  if(exception != null){return;}
+  try
+  {
+    currentView.onDoubleTap(new PVector(x, y));
   }
   catch(Exception e)
   { 
@@ -239,7 +254,7 @@ public void keyPressed()
       case MENU:
         if(currentView == mainView)
         {
-          switchToView(menuView);
+          switchToView(matchingView);
         }
         else
         {

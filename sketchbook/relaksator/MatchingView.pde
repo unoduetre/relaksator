@@ -2,12 +2,6 @@ import ketai.camera.KetaiCamera;
 import papaya.Mat;
 import java.util.LinkedList;
 
-public static class Gesture 
-{
-  public static Gesture ROTATE = new Gesture();
-  public static Gesture PINCH = new Gesture();
-}
-
 public static class MatchingView extends View
 {
 
@@ -23,7 +17,7 @@ public static class MatchingView extends View
   protected Float right = null;
   protected Float top = null;
   protected Float bottom = null;
-  protected Gesture currentEvent = null;
+  protected Boolean dragging = true;
   protected ColladaTriangles triangles = null;
   protected List<Float> uv = null;
   protected PGraphics graphics = null;
@@ -156,9 +150,8 @@ public static class MatchingView extends View
     }
   }  
   
-  public void mousePressed(PVector mousePosition) throws Exception
+  public void onTap(PVector position)
   {
-    //pApplet.println("MOUSE PRESSED");    
     if(takingPhoto)
     {
       graphics.beginDraw();
@@ -169,65 +162,56 @@ public static class MatchingView extends View
       photo = graphics.get();
       camera.stop();    
       takingPhoto = false; 
-    }
-    super.mousePressed(mousePosition);
-    currentEvent = null;   
-  }
-  
-  public void mouseReleased(PVector mousePosition) throws Exception
-  {
-    //pApplet.println("MOUSE RELEASED");   
-    super.mouseReleased(mousePosition);
+    }    
   }
   
   public void mouseDragged(PVector mousePosition) throws Exception
   {
-    if(currentEvent == Gesture.ROTATE)
+    if(dragging)
     {
-      return;
-    }
-    else if(currentEvent == Gesture.PINCH)
-    {
-      //pApplet.println("PINCH");
-      PVector delta = PVector.sub(mousePosition, previousMousePosition);
-      matrix[0][0] *= (pApplet.width + delta.x) / pApplet.width;
-      matrix[1][1] *= (pApplet.height - delta.y) / pApplet.height;
-    }
-    else
-    {
-      //pApplet.println("MOUSE DRAGGED");
       PVector delta = PVector.sub(mousePosition,previousMousePosition);
-      //pApplet.println("drag: "+String.valueOf(delta));
       matrix[0][2] += delta.x / (right - left);
       matrix[1][2] -= delta.y / (bottom - top);
-    }    
-    super.mouseDragged(mousePosition);
+    }
+    super.mouseDragged(mousePosition);    
+  }
+  
+  public void mousePressed(PVector position) throws Exception
+  {
+    dragging = true;
+    super.mousePressed(position);
+  }
+  
+  public void mouseReleased(PVector position) throws Exception
+  {
+    dragging = true;
+    super.mouseReleased(position);    
   }
   
   public void onFlick(PVector end, PVector start, Float speed) throws Exception
   {
-    super.onFlick(end, start, speed);    
+    super.onFlick(end, start, speed);
+    dragging = true;
   }
   
   public void onPinch(PVector position, Float distance) throws Exception
   {
-    super.onPinch(position, distance);  
-    if(currentEvent != null)
+    super.onPinch(position, distance);
+    dragging = false;    
+    if(position.x >= 0.8 * pApplet.width  && position.y > 0.2 * pApplet.height)
     {
-      return;
+      matrix[1][1] *= (pApplet.height + distance) / pApplet.height;      
     }
-    currentEvent = Gesture.PINCH;
+    else if(position.x < pApplet.width * 0.8 && position.y <= 0.2 * pApplet.height)
+    {
+      matrix[0][0] *= (pApplet.width + distance) / pApplet.width;      
+    }
   }
 
   public void onRotate(PVector position, Float angle) throws Exception
   {
-    super.onPinch(position, angle);
-    if(pApplet.abs(angle) < 0.0001)
-    {
-      return;
-    }
-    //pApplet.println("ROTATE: "+String.valueOf(angle));
-    currentEvent = Gesture.ROTATE;
+    super.onRotate(position, angle);
+    dragging = false;    
     Float c = pApplet.cos(-angle);
     Float s = pApplet.sin(-angle);
     float[][] rotation = new float[][] {

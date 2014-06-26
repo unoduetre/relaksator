@@ -302,7 +302,7 @@ public static class ColladaAnimation extends ColladaPart
       animation.start(startTime, startAnimation, stopAnimation);
     }
     
-    this.startTime = startTime;
+    this.startTime = startTime/2;
     this.startAnimation = startAnimation;
     this.stopAnimation = stopAnimation;
   } 
@@ -324,7 +324,7 @@ public static class ColladaAnimation extends ColladaPart
   public void run() throws Exception
   {
     
-    Long currentTime = System.currentTimeMillis();
+    Long currentTime = System.currentTimeMillis()/2;
     
     for(ColladaAnimation animation : animationList)
     {
