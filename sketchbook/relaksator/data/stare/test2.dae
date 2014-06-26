@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
+  <library_geometries>
+    <geometry id="geometriaTestowa">
+      <mesh>
+        <source id="zrodloTestowe">
+          <float_array id="tablicaTestowa" count="9">
+            0.0 0.0 0.0
+            100.0 0.0 0.0
+            0.0 200.0 0.0
+          </float_array>
+          <technique_common>
+            <accessor source="#tablicaTestowa" count="3" stride="3">
+              <param name="X" type="float"/>
+              <param name="Y" type="float"/>
+              <param name="Z" type="float"/>
+            </accessor>
+          </technique_common>
+        </source>
+        <vertices id="wierzcholkiTestowe">
+          <input semantic="POSITION" source="#zrodloTestowe"/>
+        </vertices>
+        <triangles count="1">
+          <input semantic="VERTEX" offset="0" source="#wierzcholkiTestowe"/>
+          <p>0 1 2</p>
+        </triangles>
+      </mesh>
+    </geometry>
+  </library_geometries>
+  <library_visual_scenes>
+    <visual_scene id="scenaTestowa">
+      <node id="wezelTestowy">
+        <matrix>
+          2.0 0.0 0.0 -100.0
+          0.0 1.0 0.0 0.0
+          0.0 0.0 1.0 0.0
+          0.0 0.0 0.0 1.0
+        </matrix>
+        <instance_geometry url="#geometriaTestowa"/>
+      </node>
+    </visual_scene>
+  </library_visual_scenes>
+  <scene>
+    <instance_visual_scene url="#scenaTestowa"/>
+  </scene>
+</COLLADA>
