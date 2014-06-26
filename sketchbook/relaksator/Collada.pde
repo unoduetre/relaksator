@@ -16,6 +16,7 @@ public static interface HavingContent<T>
   public abstract T getContent();
   public abstract void setContent(T content);
   public abstract void reset();
+  public abstract Integer getVersion();
 }
 
 public static abstract class ColladaPart
@@ -275,7 +276,9 @@ public static class ColladaAnimation extends ColladaPart
   protected List<ColladaChannel> channelList = new ArrayList<ColladaChannel>();
   protected List<ColladaExtra> extraList = new ArrayList<ColladaExtra>();
   
-  protected Long start = null;
+  protected Long startTime = null;
+  protected Long startAnimation = null;
+  protected Long stopAnimation = null;
   
   public ColladaAnimation(PApplet pApplet, XML animation, ColladaPart parent) throws Exception
   {
@@ -292,19 +295,26 @@ public static class ColladaAnimation extends ColladaPart
     parseChildren(animation, "extra", ColladaExtra.class, extraList);
   }
   
-  public void start(Long startTime)
+  public void start(Long startTime, Long startAnimation, Long stopAnimation)
   {
     for(ColladaAnimation animation : animationList)
     {
-      animation.start(startTime);
+      animation.start(startTime, startAnimation, stopAnimation);
     }
     
-    start = startTime;
-  }
+    this.startTime = startTime;
+    this.startAnimation = startAnimation;
+    this.stopAnimation = stopAnimation;
+  } 
   
   public void stop() throws Exception
   {
-    start = null;
+    startTime = null;
+    for(ColladaAnimation animation : animationList)
+    {
+      animation.stop();
+    }    
+    
     for(ColladaChannel channel : channelList)
     {
       channel.reset();
@@ -314,22 +324,27 @@ public static class ColladaAnimation extends ColladaPart
   public void run() throws Exception
   {
     
-    Long current = System.currentTimeMillis();
+    Long currentTime = System.currentTimeMillis();
     
     for(ColladaAnimation animation : animationList)
     {
       animation.run();
     }
     
-    if(start == null)
+    if(startTime == null)
     {
       return;
     }
-    
+    if(currentTime >= startTime+(stopAnimation-startAnimation))
+    {
+      stop();
+      return;
+    }
     for(ColladaChannel channel : channelList)
     {
-      channel.forwardFor((current-start)/1000.0);
-    }   
+      channel.forwardFor((startAnimation + currentTime - startTime)/1000.0);
+    }
+     
   }
 }
 
@@ -772,6 +787,7 @@ public static class ColladaSkin extends ColladaPart
   
   public void draw() throws Exception
   {
+    //Long time = System.currentTimeMillis();
     
     List<float[][]> matrixList = new ArrayList<float[][]>();
     for(Integer i = 0; i < combinedBindMatrixList.size(); ++i)
@@ -779,12 +795,16 @@ public static class ColladaSkin extends ColladaPart
       matrixList.add(Mat.multiply(joints.getJointMatrix(i),combinedBindMatrixList.get(i)));
     }
     
+    //pApplet.println("1 skin draw: "+String.valueOf(System.currentTimeMillis()-time));
+    
     List<Map<Integer, Float>> weightMapList = vertexWeights.getContent();
         
     ColladaGeometry geometry = ((ColladaGeometry)getByURL(sourceAttr));
     ColladaFloatArray floatArray = ((ColladaTechniqueCommonInSource)geometry.getMesh().getVertices().getPositionsSource().getTechnique()).getAccessor().getSource(ColladaFloatArray.class);
     List<Float> oldVertexList = floatArray.getContent();
     List<Float> newVertexList = new ArrayList<Float>();
+    
+    //pApplet.println("2 skin draw: "+String.valueOf(System.currentTimeMillis()-time));    
     
     for(Integer i = 0; i < oldVertexList.size(); i += 3)
     {
@@ -802,13 +822,20 @@ public static class ColladaSkin extends ColladaPart
         newVertexList.add((Float)newVertex[0]);
         newVertexList.add((Float)newVertex[1]);
         newVertexList.add((Float)newVertex[2]);
-    }   
+    }
+    
+    //pApplet.println("3 skin draw: "+String.valueOf(System.currentTimeMillis()-time));      
     
     floatArray.setContent(newVertexList);
     
+    //pApplet.println("4 skin draw: "+String.valueOf(System.currentTimeMillis()-time));
+    
     geometry.draw();
     
+    //pApplet.println("5 skin draw: "+String.valueOf(System.currentTimeMillis()-time));    
+    
     floatArray.reset();
+    //pApplet.println("skin draw: "+String.valueOf(System.currentTimeMillis()-time));
   }
 }
 
@@ -958,6 +985,10 @@ public static class ColladaAccessor extends ColladaPart
   protected String source = null;
   protected Integer stride = null;
   
+  protected HavingContent<List<Object>> lazySource  = null;
+  protected Integer sourceVersion = null;
+  protected List<Map<String, Object>> mapList = null;
+  
   protected List<ColladaParam> paramList = new ArrayList<ColladaParam>();
   
   public ColladaAccessor(PApplet pApplet, XML accessor, ColladaPart parent) throws Exception
@@ -970,6 +1001,7 @@ public static class ColladaAccessor extends ColladaPart
     stride = parseAttribute(accessor, "stride", Integer.class, 1);
     
     parseChildren(accessor, "param", ColladaParam.class, paramList);
+    
   }
   
   public Integer getCount()
@@ -982,36 +1014,58 @@ public static class ColladaAccessor extends ColladaPart
     return (T)getByURL(source);
   }
   
+  private void initialize() throws Exception
+  {
+    mapList = new ArrayList<Map<String, Object>>();
+    lazySource = (HavingContent<List<Object>>)getByURL(source);
+    sourceVersion = lazySource.getVersion();
+    for(Integer index = 0; index < count; ++index)
+    {
+      Map<String, Object> map = new HashMap<String, Object>();
+      Deque<Object> deque = new LinkedList<Object>(lazySource.getContent().subList(offset + index*stride, offset+(index+1)*stride));
+    
+      for(Integer i = 0; i < paramList.size(); ++i)
+      {
+        ColladaParam param = paramList.get(i);
+        String paramName = param.getName();
+        if(paramName == null)
+        {
+          if(map.get(param.getType()) == null)
+          {
+            paramName = param.getType();
+          }
+          else
+          {
+            continue;
+          }
+        }
+      
+        map.put(paramName, param.getFromDeque(deque));      
+      }
+      
+      mapList.add(map);
+    }
+  }
   public Map<String, Object> get(Integer index) throws Exception
   {
+    //Long nanoTime = null;
+    
+    //nanoTime = System.nanoTime();
+    
+    if(lazySource == null || lazySource.getVersion().intValue() != sourceVersion.intValue())
+    {
+      initialize();
+    }    
+    
     if(index >= count)
     {
       throw new IndexOutOfBoundsException("Indeks dla akcesora wykracza poza zakres.");
     }
     
-    Map<String, Object> map = new HashMap<String, Object>();
-    Deque<Object> deque = new LinkedList<Object>(((HavingContent<List<Object>>)getByURL(source)).getContent().subList(offset + index*stride, offset+(index+1)*stride));
     
-    for(Integer i = 0; i < paramList.size(); ++i)
-    {
-      ColladaParam param = paramList.get(i);
-      String paramName = param.getName();
-      if(paramName == null)
-      {
-        if(map.get(param.getType()) == null)
-        {
-          paramName = param.getType();
-        }
-        else
-        {
-          continue;
-        }
-      }
-      
-      map.put(paramName, param.getFromDeque(deque));
-    }
+    //pApplet.println("                            ACCESSOR: "+String.valueOf(System.nanoTime()-nanoTime));
     
-    return map;  
+    return mapList.get(index);  
   }
 }
 
@@ -1020,6 +1074,7 @@ public static abstract class ColladaArray<T> extends ColladaPart implements Havi
   protected Integer count = null;
   protected String id = null;
   protected String name = null;
+  protected Integer version = null;
   
   protected List<T> content = new ArrayList<T>();
   protected List<T> newContent = null;
@@ -1031,7 +1086,8 @@ public static abstract class ColladaArray<T> extends ColladaPart implements Havi
     count = parseAttribute(array, "count", Integer.class);
     id = parseAttribute(array, "id", String.class);
     name = parseAttribute(array, "name", String.class);
-    
+
+    version = 0;    
     
     for(String value : array.getContent().split("\\s+"))
     {
@@ -1053,14 +1109,33 @@ public static abstract class ColladaArray<T> extends ColladaPart implements Havi
     }
   }
   
+  public Integer getVersion()
+  {
+    return version;
+  }
+  
+  private void modified()
+  {
+    if(version.intValue() == Integer.MAX_VALUE)
+    {
+      version = 0;
+    }
+    else
+    {
+      ++version;
+    }    
+  }
+  
   public void setContent(List<T> newContent)
   {
     this.newContent = newContent; 
+    modified();
   }
   
   public void reset()
   {
     newContent = null;
+    modified();
   }
   
   public List<T> getContent()
@@ -1500,21 +1575,29 @@ public static class ColladaInput extends ColladaPart
   
   public Map<String, Map<String, Object>> getUsingInput(Integer index) throws Exception
   {
+    //Long nanoTime = null;
+    
+    //nanoTime = System.nanoTime();
+    
     ColladaPart part = getByURL(source);
     if(part.getClass() == ColladaSource.class)
     {
+      
       Map<String, Map<String, Object>> map = new HashMap<String, Map<String, Object>>();
       map.put(semantic,((ColladaSource)part).getUsingTechnique(index));
+      //pApplet.println("                  input s draw: "+String.valueOf(System.nanoTime()-nanoTime));       
       return map;
     }
     else if(part.getClass() == ColladaVertices.class)
     {
-      return ((ColladaVertices)part).getUsingVertices(index);
+      Map<String, Map<String, Object>> map = ((ColladaVertices)part).getUsingVertices(index); 
+      //pApplet.println("                  input v draw: "+String.valueOf(System.nanoTime()-nanoTime));       
+      return map;
     }
     else
     {
       throw new Exception("TODO ColladaInput->getUsingInput(...)");
-    }
+    }   
   }
   
   public Integer getOffset()
@@ -1942,6 +2025,8 @@ public static class ColladaTriangles extends ColladaPart
   
   public void draw() throws Exception
   {
+    //Long time = System.currentTimeMillis();    
+    
     pApplet.beginShape(pApplet.TRIANGLES);
     
     if(newImage != null)
@@ -1953,32 +2038,61 @@ public static class ColladaTriangles extends ColladaPart
       pApplet.texture(image);
     }
     
+    //pApplet.println("    1 mesh draw: "+String.valueOf(System.currentTimeMillis()-time));    
+    
     List<Integer> t = p.getContent();
+    
+    Map<String, Map<String, Object>> map = new HashMap<String, Map<String, Object>>();
+
+    //pApplet.println("    2 mesh draw: "+String.valueOf(System.currentTimeMillis()-time));       
+
+    //Long nanoTime = null;
+    //Long nanoTime2 = null;
     
     for(Integer triangleIndex = 0; triangleIndex < count; ++triangleIndex)
     { 
       for(Integer vertexIndex = 0; vertexIndex < 3; ++vertexIndex)
       {
-        Map<String, Map<String, Object>> map = new HashMap<String, Map<String, Object>>();
-        Integer vIndex = null;
-      
+        
+        //nanoTime = System.nanoTime();
+        
         for(Integer offset = 0; offset <= maxOffset; ++offset)
         {
+          //nanoTime2 = System.nanoTime();
+          
           ColladaInput input = inputMap.get(offset);
+          if(input.getSemantic().equals("COLOR")) // OPTYMALIZACJA
+          {
+            continue;
+          }
+          
           if(input == null)
           {
             continue;
           }
           
+          //pApplet.println("              1 looop mesh draw: "+String.valueOf(System.nanoTime()-nanoTime2));
+          //nanoTime2 = System.nanoTime();
+          
           map.putAll(input.getUsingInput(t.get(triangleIndex*3*(maxOffset+1) + vertexIndex*(maxOffset+1) + offset)));
+          
+          //pApplet.println("              2 looop mesh draw: "+String.valueOf(System.nanoTime()-nanoTime2));
         }
         
+        //pApplet.println("        1 loop mesh draw: "+String.valueOf(System.nanoTime()-nanoTime));
+        //nanoTime = System.nanoTime();        
         pApplet.normal((Float)map.get("NORMAL").get("X"), (Float)map.get("NORMAL").get("Y"), (Float)map.get("NORMAL").get("Z"));
         pApplet.vertex((Float)map.get("POSITION").get("X"), (Float)map.get("POSITION").get("Y"), (Float)map.get("POSITION").get("Z"), (Float)map.get("TEXCOORD").get("S"), 1.0-(Float)map.get("TEXCOORD").get("T"));
-      }  
+        //pApplet.println("        2 loop mesh draw: "+String.valueOf(System.nanoTime()-nanoTime));
+        
+      }      
     }
     
+    //pApplet.println("    3 mesh draw: "+String.valueOf(System.currentTimeMillis()-time));      
+    
     pApplet.endShape(); 
+    
+    //pApplet.println("    mesh draw: "+String.valueOf(System.currentTimeMillis()-time));    
   }
   
   public void setImage(PImage img)
@@ -2687,12 +2801,15 @@ public static class ColladaMatrix extends ColladaPart implements HavingContent<f
   protected float[][] content = new float[4][4];
   
   protected float[][] newContent = null;
+  protected Integer version = null;  
   
   public ColladaMatrix(PApplet pApplet, XML matrix, ColladaPart parent) throws Exception
   {
     super(pApplet, matrix, parent);
     
     sid = parseAttribute(matrix, "sid", String.class);
+    
+    version = 0; 
     
     Integer i = 0;
     Integer j = 0;
@@ -2710,14 +2827,33 @@ public static class ColladaMatrix extends ColladaPart implements HavingContent<f
     }
   }
   
+  public Integer getVersion()
+  {
+    return version;
+  }
+  
+  private void modified()
+  {
+    if(version.intValue() == Integer.MAX_VALUE)
+    {
+      version = 0;
+    }
+    else
+    {
+      ++version;
+    }    
+  }  
+  
   public void setContent(float[][] newContent)
   {
     this.newContent = newContent;
+    modified();
   }
   
   public void reset()
   {
     newContent = null;
+    modified();
   }
   
   public float[][] getContent()

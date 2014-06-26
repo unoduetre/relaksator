@@ -58,10 +58,8 @@ public static class MatchingView extends View
     bottom = top + previewHeight;
     
     uvImage = pApplet.loadImage("uv.png");
-    triangles = ((ColladaGeometry)collada.getById("glowka001-lib")).getMesh().getTriangles();
+    triangles = ((ColladaGeometry)collada.getById("glowka002-lib")).getMesh().getTriangles();
     floatArray = ((ColladaTechniqueCommonInSource)triangles.getTexcoordSource().getTechnique()).getAccessor().getSource(ColladaFloatArray.class);
-    floatArray.reset();
-    uv = new ArrayList<Float>(floatArray.getContent());
   }
   
   public void show()
@@ -72,7 +70,9 @@ public static class MatchingView extends View
       {1.0, 0.0, 0.0},
       {0.0, 1.0, 0.0},
       {0.0, 0.0, 1.0}
-    };    
+    };
+    floatArray.reset();
+    uv = new ArrayList<Float>(floatArray.getContent());    
   }
   
   public void hide()
@@ -135,10 +135,10 @@ public static class MatchingView extends View
         matrix[2][0],    matrix[2][1],    0.0,             matrix[2][2]
       );     
       
-      for(Integer i = 0; i < uv.size(); i += 2)
+      /*for(Integer i = 0; i < uv.size(); i += 2)
       {
         pApplet.ellipse(uv.get(i), uv.get(i+1),0.01,0.01);
-      }
+      }*/
       
       
       pApplet.pushMatrix();
@@ -204,12 +204,12 @@ public static class MatchingView extends View
     super.mouseDragged(mousePosition);
   }
   
-  public void onFlick(PVector position, PVector delta, Float speed)
+  public void onFlick(PVector end, PVector start, Float speed) throws Exception
   {
-    super.onFlick(position, delta, speed);    
+    super.onFlick(end, start, speed);    
   }
   
-  public void onPinch(PVector position, Float distance)
+  public void onPinch(PVector position, Float distance) throws Exception
   {
     super.onPinch(position, distance);  
     if(currentEvent != null)
@@ -219,7 +219,7 @@ public static class MatchingView extends View
     currentEvent = Gesture.PINCH;
   }
 
-  public void onRotate(PVector position, Float angle)
+  public void onRotate(PVector position, Float angle) throws Exception
   {
     super.onPinch(position, angle);
     if(pApplet.abs(angle) < 0.0001)

@@ -62,23 +62,96 @@ public static class MainView extends View
       pApplet.scale(0.01*pApplet.height);
     }
     collada.run();
+    //Long time = System.currentTimeMillis();
     scene.draw();
+    //pApplet.println("scene draw: "+String.valueOf(System.currentTimeMillis()-time));
     pApplet.popMatrix();
     pApplet.popStyle();    
   }
   
-  public void mousePressed(PVector mousePosition) throws Exception
+  public void startRightHookAnimation() throws Exception
   {
     Long startTime = System.currentTimeMillis();
-    ((ColladaAnimation)collada.getById("makowa-anim")).start(startTime);
-    ((ColladaAnimation)collada.getById("szyja-anim")).start(startTime);
-    ((ColladaAnimation)collada.getById("krengoslup-anim")).start(startTime);
+    ((ColladaAnimation)collada.getById("Bone001-anim")).start(startTime, 0*33l, 9*33l);
+    ((ColladaAnimation)collada.getById("Bone002-anim")).start(startTime, 0*33l, 9*33l);
+    ((ColladaAnimation)collada.getById("Bone003-anim")).start(startTime, 0*33l, 9*33l);
+    ((ColladaAnimation)collada.getById("Bone004-anim")).start(startTime, 0*33l, 9*33l);      
   }
-
-  public void mouseReleased(PVector mousePosition) throws Exception
+  
+  public void startLeftHookAnimation() throws Exception
   {
-    ((ColladaAnimation)collada.getById("makowa-anim")).stop();
-    ((ColladaAnimation)collada.getById("szyja-anim")).stop();
-    ((ColladaAnimation)collada.getById("krengoslup-anim")).stop();
-  }  
+    Long startTime = System.currentTimeMillis();
+    ((ColladaAnimation)collada.getById("Bone001-anim")).start(startTime, 16*33l, 25*33l);
+    ((ColladaAnimation)collada.getById("Bone002-anim")).start(startTime, 16*33l, 25*33l);
+    ((ColladaAnimation)collada.getById("Bone003-anim")).start(startTime, 16*33l, 25*33l);
+    ((ColladaAnimation)collada.getById("Bone004-anim")).start(startTime, 16*33l, 25*33l);      
+  }
+  
+  public void startPunchAnimation() throws Exception
+  {
+    Long startTime = System.currentTimeMillis();
+    ((ColladaAnimation)collada.getById("Bone001-anim")).start(startTime, 32*33l, 41*33l);
+    ((ColladaAnimation)collada.getById("Bone002-anim")).start(startTime, 32*33l, 41*33l);
+    ((ColladaAnimation)collada.getById("Bone003-anim")).start(startTime, 32*33l, 41*33l);
+    ((ColladaAnimation)collada.getById("Bone004-anim")).start(startTime, 32*33l, 41*33l);      
+  }
+  
+  public void startElectricityAnimation() throws Exception
+  {
+    Long startTime = System.currentTimeMillis();
+    ((ColladaAnimation)collada.getById("Bone001-anim")).start(startTime, 48*33l, 65*33l);
+    ((ColladaAnimation)collada.getById("Bone002-anim")).start(startTime, 48*33l, 65*33l);
+    ((ColladaAnimation)collada.getById("Bone003-anim")).start(startTime, 48*33l, 65*33l);
+    ((ColladaAnimation)collada.getById("Bone004-anim")).start(startTime, 48*33l, 65*33l);      
+  }
+  
+  public void startShakingAnimation() throws Exception
+  {
+    Long startTime = System.currentTimeMillis();
+    ((ColladaAnimation)collada.getById("Bone001-anim")).start(startTime, 72*33l, 81*33l);
+    ((ColladaAnimation)collada.getById("Bone002-anim")).start(startTime, 72*33l, 81*33l);
+    ((ColladaAnimation)collada.getById("Bone003-anim")).start(startTime, 72*33l, 81*33l);
+    ((ColladaAnimation)collada.getById("Bone004-anim")).start(startTime, 72*33l, 81*33l);      
+  }
+  
+  public void stopAnimation() throws Exception
+  {
+    ((ColladaAnimation)collada.getById("Bone001-anim")).stop();
+    ((ColladaAnimation)collada.getById("Bone002-anim")).stop();
+    ((ColladaAnimation)collada.getById("Bone003-anim")).stop();
+    ((ColladaAnimation)collada.getById("Bone004-anim")).stop();       
+  }
+  
+  public void onTap(PVector position) throws Exception
+  {
+    stopAnimation();
+    startPunchAnimation();
+  }
+  
+  public void onFlick(PVector end, PVector start, Float speed) throws Exception
+  {
+    PVector delta = PVector.sub(end,start);
+    stopAnimation();
+    if(delta.x >= 0)
+    {
+      startLeftHookAnimation();
+    }
+    else
+    {
+      startRightHookAnimation();
+    }
+  }
+  
+  public void onPinch(PVector position, Float distance) throws Exception
+  {
+    stopAnimation();
+    startElectricityAnimation();
+  }
+  
+  public void onRotate(PVector position, Float angle) throws Exception
+  {
+    stopAnimation();
+    startShakingAnimation();
+  }    
+ 
 }

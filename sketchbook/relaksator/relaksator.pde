@@ -1,11 +1,3 @@
-/* 
-  UWAGA! Aktualnie projekt nic nie wyświetla, gdyż pracuję nad importem plików w formacie Collada.
-  Działa natomiast menu.
-  Jeszcze trochę mi zostało pracy przy tym imporcie Collady, ale jak już to zrobię, to będzie też od razu
-  zestaw klas odpowiadających różnym obiektom 3D, których użyję jako frameworka dla reszty programu...
-*/
-
-
 /*
   Użyte biblioteki:
     ControlP5
@@ -57,7 +49,7 @@ public void setup()
   try
   {
     //orientation(PORTRAIT);
-    Collada collada = new Collada(this, this.loadXML("animacje.dae"), null);
+    Collada collada = new Collada(this, this.loadXML("model.dae"), null);
     ketaiGesture = new KetaiGesture(this);
     controlP5 = new ControlP5(this);
     mainView = new MainView(this, collada);
@@ -78,6 +70,7 @@ public void setup()
     //stroke(0,0,255);
     fill(255,255,255);
     //noFill();
+    frameRate(60);
   }
   catch(Exception e)
   {
@@ -93,6 +86,7 @@ public void draw()
     try
     {
       currentView.draw();
+      //println(frameRate);
     }
     catch(Exception e)
     { 
@@ -112,6 +106,7 @@ public void draw()
     ByteArrayOutputStream stream = new ByteArrayOutputStream();
     exception.printStackTrace(new PrintStream(stream));
     text(stream.toString(), 0, 0, width, height);
+    println(stream.toString());
   }
 }
 
@@ -129,12 +124,27 @@ public boolean surfaceTouchEvent(MotionEvent event)
   
 }
 
-public void onFlick(float x, float y, float px, float py, float v)
+public void onTap(float x, float y)
 {
   if(exception != null){return;}
   try
   {
-    currentView.onFlick(new PVector(x, y), new PVector(px, py), v);
+    currentView.onTap(new PVector(x, y));
+  }
+  catch(Exception e)
+  { 
+    exception = e;
+    draw();
+    noLoop();
+  }   
+}
+
+public void onFlick(float endX, float endY, float startX, float startY, float v)
+{
+  if(exception != null){return;}
+  try
+  {
+    currentView.onFlick(new PVector(endX, endY), new PVector(startX, startY), v);
   }
   catch(Exception e)
   { 

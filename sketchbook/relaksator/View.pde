@@ -28,15 +28,19 @@ public static abstract class View extends Widget
     previousMousePosition = mousePosition;    
   }
   
-  public void onFlick(PVector position, PVector delta, Float speed)
+  public void onTap(PVector position) throws Exception
   {
   }
   
-  public void onPinch(PVector position, Float distance)
+  public void onFlick(PVector end, PVector start, Float speed) throws Exception
+  {
+  }
+  
+  public void onPinch(PVector position, Float distance) throws Exception
   {
   }
 
-  public void onRotate(PVector position, Float angle)
+  public void onRotate(PVector position, Float angle) throws Exception
   {
   }  
 }
